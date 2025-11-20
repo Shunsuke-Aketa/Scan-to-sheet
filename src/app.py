@@ -669,29 +669,45 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                     console.log('[CLICK] URLパラメータ:', params.toString());
                     
                     // Streamlitの親ウィンドウにURLパラメータを送信
-                    // iframe内から親ウィンドウのURLを変更するのはセキュリティ制限により困難
-                    // そのため、現在のウィンドウのURLを変更し、Streamlitがそれを検出できるようにする
+                    // iframe内から親ウィンドウのURLを変更する必要がある
+                    // セキュリティ制限により、複数の方法を試行する
                     let urlUpdated = false;
                     
-                    // 方法1: window.location.searchを直接操作（最も確実）
+                    // 方法1: window.top.location.hrefを使用（最優先：親ウィンドウのURLを直接変更）
                     try {{
-                        // 現在のURLからベースURLを取得
-                        const currentUrl = window.location.href;
-                        const baseUrl = currentUrl.split('?')[0];
-                        const newUrl = baseUrl + '?' + params.toString();
-                        
-                        console.log('[CLICK] 現在のURL:', currentUrl);
-                        console.log('[CLICK] 新しいURL:', newUrl);
-                        
-                        // URLを変更（これによりページがリロードされる）
-                        window.location.href = newUrl;
-                        urlUpdated = true;
-                        console.log('[CLICK] window.location.hrefでURLを更新しました');
+                        if (window.top && window.top !== window) {{
+                            const currentUrl = window.top.location.href.split('?')[0];
+                            const newUrl = currentUrl + '?' + params.toString();
+                            console.log('[CLICK] window.top.location.hrefを更新:', newUrl);
+                            console.log('[CLICK] 現在のwindow.top.location.href:', window.top.location.href);
+                            window.top.location.href = newUrl;
+                            urlUpdated = true;
+                            console.log('[CLICK] window.top.location.hrefでURLを更新しました');
+                        }}
                     }} catch (e) {{
-                        console.error('[CLICK] window.location.hrefエラー:', e);
+                        console.log('[CLICK] window.top.location.hrefエラー（セキュリティ制限の可能性）:', e);
+                        console.log('[CLICK] エラー詳細:', e.message);
                     }}
                     
-                    // 方法2: window.parent.postMessageを使用（フォールバック）
+                    // 方法2: window.parent.location.hrefを使用（フォールバック）
+                    if (!urlUpdated) {{
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                const currentUrl = window.parent.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[CLICK] window.parent.location.hrefを更新:', newUrl);
+                                console.log('[CLICK] 現在のwindow.parent.location.href:', window.parent.location.href);
+                                window.parent.location.href = newUrl;
+                                urlUpdated = true;
+                                console.log('[CLICK] window.parent.location.hrefでURLを更新しました');
+                            }}
+                        }} catch (e) {{
+                            console.log('[CLICK] window.parent.location.hrefエラー（セキュリティ制限の可能性）:', e);
+                            console.log('[CLICK] エラー詳細:', e.message);
+                        }}
+                    }}
+                    
+                    // 方法3: window.parent.postMessageを使用（フォールバック）
                     if (!urlUpdated) {{
                         try {{
                             if (window.parent && window.parent !== window) {{
@@ -705,39 +721,31 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                                     }}
                                 }}, '*');
                                 console.log('[CLICK] postMessageで送信しました');
+                                // postMessageは非同期なので、urlUpdatedは設定しない
                             }}
                         }} catch (e) {{
                             console.log('[CLICK] postMessageエラー:', e);
                         }}
                     }}
                     
-                    // 方法3: window.top.location.hrefを使用（フォールバック）
+                    // 方法4: window.location.hrefを使用（最後の手段：iframe内のURLを変更）
+                    // 注意: これは親ウィンドウのURLを変更しないため、Streamlit側で検出できない可能性がある
                     if (!urlUpdated) {{
                         try {{
-                            if (window.top && window.top !== window) {{
-                                const currentUrl = window.top.location.href.split('?')[0];
-                                const newUrl = currentUrl + '?' + params.toString();
-                                console.log('[CLICK] window.top.location.hrefを更新:', newUrl);
-                                window.top.location.href = newUrl;
-                                urlUpdated = true;
-                            }}
+                            const currentUrl = window.location.href;
+                            const baseUrl = currentUrl.split('?')[0];
+                            const newUrl = baseUrl + '?' + params.toString();
+                            
+                            console.log('[CLICK] 現在のURL（iframe内）:', currentUrl);
+                            console.log('[CLICK] 新しいURL（iframe内）:', newUrl);
+                            console.log('[CLICK] 警告: iframe内のURLを変更しています。親ウィンドウのURLは変更されません。');
+                            
+                            // URLを変更（これによりページがリロードされる）
+                            window.location.href = newUrl;
+                            urlUpdated = true;
+                            console.log('[CLICK] window.location.hrefでURLを更新しました（iframe内）');
                         }} catch (e) {{
-                            console.log('[CLICK] window.top.location.hrefエラー（セキュリティ制限の可能性）:', e);
-                        }}
-                    }}
-                    
-                    // 方法4: window.parent.location.hrefを使用（フォールバック）
-                    if (!urlUpdated) {{
-                        try {{
-                            if (window.parent && window.parent !== window) {{
-                                const currentUrl = window.parent.location.href.split('?')[0];
-                                const newUrl = currentUrl + '?' + params.toString();
-                                console.log('[CLICK] window.parent.location.hrefを更新:', newUrl);
-                                window.parent.location.href = newUrl;
-                                urlUpdated = true;
-                            }}
-                        }} catch (e) {{
-                            console.log('[CLICK] window.parent.location.hrefエラー（セキュリティ制限の可能性）:', e);
+                            console.error('[CLICK] window.location.hrefエラー:', e);
                         }}
                     }}
                     
