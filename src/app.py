@@ -453,7 +453,7 @@ def draw_point_on_image(image: Image.Image, x: int, y: int, color: Tuple[int, in
 
 def create_image_with_coord_display(image: Image.Image, image_key: str) -> str:
     """
-    画像を表示し、カーソル位置の座標を表示するHTMLコンポーネントを作成
+    画像を表示し、カーソル位置の座標を表示し、クリック座標を取得するHTMLコンポーネントを作成
     
     Args:
         image: 表示する画像（PIL Image）
@@ -467,30 +467,42 @@ def create_image_with_coord_display(image: Image.Image, image_key: str) -> str:
     image.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
     
-    # ユニークなIDを生成
-    unique_id = image_key.replace(" ", "_").replace(".", "_")
+    # ユニークなIDを生成（特殊文字を置換）
+    unique_id = image_key.replace(" ", "_").replace(".", "_").replace("/", "_").replace("\\", "_")
+    
+    # 元の画像サイズを取得（座標変換用）
+    original_width = image.width
+    original_height = image.height
     
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
         <style>
+            body {{
+                margin: 0;
+                padding: 10px;
+                font-family: Arial, sans-serif;
+            }}
             #container_{unique_id} {{
                 position: relative;
                 display: inline-block;
                 width: 100%;
+                max-width: 100%;
             }}
             #coord_image_{unique_id} {{
                 max-width: 100%;
                 height: auto;
                 cursor: crosshair;
                 display: block;
+                user-select: none;
             }}
             #coord_display_{unique_id} {{
                 position: absolute;
-                background: rgba(0, 0, 0, 0.8);
+                background: rgba(0, 0, 0, 0.85);
                 color: white;
-                padding: 5px 10px;
+                padding: 8px 12px;
                 border-radius: 5px;
                 font-size: 14px;
                 font-weight: bold;
@@ -498,6 +510,7 @@ def create_image_with_coord_display(image: Image.Image, image_key: str) -> str:
                 display: none;
                 z-index: 1000;
                 white-space: nowrap;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             }}
         </style>
     </head>
@@ -505,153 +518,145 @@ def create_image_with_coord_display(image: Image.Image, image_key: str) -> str:
         <div id="container_{unique_id}">
             <img id="coord_image_{unique_id}" 
                  src="data:image/png;base64,{img_str}" 
-                 onload="initImage_{unique_id}()" />
+                 alt="座標選択用画像" />
             <div id="coord_display_{unique_id}"></div>
         </div>
         <script>
-            let img_{unique_id} = null;
-            let display_{unique_id} = null;
-            let container_{unique_id} = null;
-            
-            function initImage_{unique_id}() {{
-                img_{unique_id} = document.getElementById('coord_image_{unique_id}');
-                display_{unique_id} = document.getElementById('coord_display_{unique_id}');
-                container_{unique_id} = document.getElementById('container_{unique_id}');
+            (function() {{
+                'use strict';
                 
-                if (img_{unique_id} && display_{unique_id}) {{
-                    console.log('[JS DEBUG] イベントリスナーを追加します');
-                    img_{unique_id}.addEventListener('mousemove', showCoordinates_{unique_id});
-                    img_{unique_id}.addEventListener('mouseleave', hideCoordinates_{unique_id});
-                    img_{unique_id}.addEventListener('click', handleImageClick_{unique_id});
-                    console.log('[JS DEBUG] イベントリスナーの追加が完了しました');
-                }} else {{
-                    console.log('[JS DEBUG] 画像要素または表示要素が見つかりません:', {{
-                        img: !!img_{unique_id},
-                        display: !!display_{unique_id}
-                    }});
-                }}
-            }}
-            
-            function showCoordinates_{unique_id}(event) {{
-                if (!img_{unique_id} || !display_{unique_id}) return;
+                let img_{unique_id} = null;
+                let display_{unique_id} = null;
+                let container_{unique_id} = null;
+                let originalWidth_{unique_id} = {original_width};
+                let originalHeight_{unique_id} = {original_height};
                 
-                const rect = img_{unique_id}.getBoundingClientRect();
-                const scaleX = img_{unique_id}.naturalWidth / rect.width;
-                const scaleY = img_{unique_id}.naturalHeight / rect.height;
-                
-                const x = Math.round((event.clientX - rect.left) * scaleX);
-                const y = Math.round((event.clientY - rect.top) * scaleY);
-                
-                display_{unique_id}.textContent = `座標: (${{x}}, ${{y}})`;
-                display_{unique_id}.style.display = 'block';
-                
-                const offsetX = event.clientX - rect.left + 15;
-                const offsetY = event.clientY - rect.top - 35;
-                
-                display_{unique_id}.style.left = offsetX + 'px';
-                display_{unique_id}.style.top = offsetY + 'px';
-            }}
-            
-            function hideCoordinates_{unique_id}() {{
-                if (display_{unique_id}) {{
-                    display_{unique_id}.style.display = 'none';
-                }}
-            }}
-            
-            function handleImageClick_{unique_id}(event) {{
-                console.log('[JS DEBUG] handleImageClick が呼び出されました');
-                if (!img_{unique_id}) {{
-                    console.log('[JS DEBUG] img_{unique_id} が null です');
-                    return;
-                }}
-                
-                console.log('[JS DEBUG] 画像要素が見つかりました');
-                const rect = img_{unique_id}.getBoundingClientRect();
-                const scaleX = img_{unique_id}.naturalWidth / rect.width;
-                const scaleY = img_{unique_id}.naturalHeight / rect.height;
-                
-                console.log('[JS DEBUG] 画像情報:', {{
-                    naturalWidth: img_{unique_id}.naturalWidth,
-                    naturalHeight: img_{unique_id}.naturalHeight,
-                    rectWidth: rect.width,
-                    rectHeight: rect.height,
-                    scaleX: scaleX,
-                    scaleY: scaleY
-                }});
-                
-                const x = Math.round((event.clientX - rect.left) * scaleX);
-                const y = Math.round((event.clientY - rect.top) * scaleY);
-                
-                console.log('[JS DEBUG] 計算された座標:', {{
-                    clientX: event.clientX,
-                    clientY: event.clientY,
-                    rectLeft: rect.left,
-                    rectTop: rect.top,
-                    x: x,
-                    y: y
-                }});
-                
-                // URLパラメータを使用してStreamlitに座標を送信
-                // タイムスタンプを追加して重複を防ぐ
-                const timestamp = Date.now();
-                const params = new URLSearchParams({{
-                    'click_x': x.toString(),
-                    'click_y': y.toString(),
-                    'image_key': '{image_key}',
-                    'timestamp': timestamp.toString()
-                }});
-                
-                console.log('[JS DEBUG] URLパラメータ:', params.toString());
-                
-                // 現在のURLにパラメータを追加
-                // st.components.v1.htmlはiframe内で表示されるため、最上位ウィンドウのURLを変更する必要がある
-                let urlChanged = false;
-                
-                // 方法1: window.top.location.hrefを使用（最上位ウィンドウ）
-                try {{
-                    const topUrl = window.top.location.href.split('?')[0];
-                    const newUrl = topUrl + '?' + params.toString();
-                    console.log('[JS DEBUG] 最上位ウィンドウのURL:', topUrl);
-                    console.log('[JS DEBUG] 新しいURL (top):', newUrl);
-                    window.top.location.href = newUrl;
-                    urlChanged = true;
-                    console.log('[JS DEBUG] window.top.location.href でURLを変更しました');
-                }} catch (e) {{
-                    console.log('[JS DEBUG] window.top.location.href エラー:', e.message);
-                }}
-                
-                // 方法2: window.parent.location.hrefを使用（親ウィンドウ）
-                if (!urlChanged) {{
-                    try {{
-                        const parentUrl = window.parent.location.href.split('?')[0];
-                        const newUrl = parentUrl + '?' + params.toString();
-                        console.log('[JS DEBUG] 親ウィンドウのURL:', parentUrl);
-                        console.log('[JS DEBUG] 新しいURL (parent):', newUrl);
-                        window.parent.location.href = newUrl;
-                        urlChanged = true;
-                        console.log('[JS DEBUG] window.parent.location.href でURLを変更しました');
-                    }} catch (e) {{
-                        console.log('[JS DEBUG] window.parent.location.href エラー:', e.message);
+                function initImage_{unique_id}() {{
+                    img_{unique_id} = document.getElementById('coord_image_{unique_id}');
+                    display_{unique_id} = document.getElementById('coord_display_{unique_id}');
+                    container_{unique_id} = document.getElementById('container_{unique_id}');
+                    
+                    if (img_{unique_id} && display_{unique_id}) {{
+                        // 画像の読み込み完了を待つ
+                        if (img_{unique_id}.complete) {{
+                            attachEventListeners_{unique_id}();
+                        }} else {{
+                            img_{unique_id}.addEventListener('load', attachEventListeners_{unique_id});
+                        }}
                     }}
                 }}
                 
-                // 方法3: 現在のウィンドウのURLを変更（フォールバック）
-                if (!urlChanged) {{
-                    console.log('[JS DEBUG] フォールバック: 現在のウィンドウのURLを変更します');
-                    const currentUrl = window.location.href.split('?')[0];
-                    const newUrl = currentUrl + '?' + params.toString();
-                    console.log('[JS DEBUG] 現在のウィンドウのURL:', currentUrl);
-                    console.log('[JS DEBUG] 新しいURL (current):', newUrl);
-                    window.location.href = newUrl;
+                function attachEventListeners_{unique_id}() {{
+                    if (!img_{unique_id} || !display_{unique_id}) return;
+                    
+                    img_{unique_id}.addEventListener('mousemove', showCoordinates_{unique_id});
+                    img_{unique_id}.addEventListener('mouseleave', hideCoordinates_{unique_id});
+                    img_{unique_id}.addEventListener('click', handleImageClick_{unique_id});
                 }}
-            }}
-            
-            // ページ読み込み時に初期化
-            if (document.readyState === 'loading') {{
-                document.addEventListener('DOMContentLoaded', initImage_{unique_id});
-            }} else {{
-                initImage_{unique_id}();
-            }}
+                
+                function showCoordinates_{unique_id}(event) {{
+                    if (!img_{unique_id} || !display_{unique_id}) return;
+                    
+                    const rect = img_{unique_id}.getBoundingClientRect();
+                    const scaleX = originalWidth_{unique_id} / rect.width;
+                    const scaleY = originalHeight_{unique_id} / rect.height;
+                    
+                    const x = Math.round((event.clientX - rect.left) * scaleX);
+                    const y = Math.round((event.clientY - rect.top) * scaleY);
+                    
+                    // 座標を表示範囲内に制限
+                    const clampedX = Math.max(0, Math.min(x, originalWidth_{unique_id} - 1));
+                    const clampedY = Math.max(0, Math.min(y, originalHeight_{unique_id} - 1));
+                    
+                    display_{unique_id}.textContent = `座標: (${{clampedX}}, ${{clampedY}})`;
+                    display_{unique_id}.style.display = 'block';
+                    
+                    const offsetX = event.clientX - rect.left + 15;
+                    const offsetY = event.clientY - rect.top - 35;
+                    
+                    display_{unique_id}.style.left = offsetX + 'px';
+                    display_{unique_id}.style.top = offsetY + 'px';
+                }}
+                
+                function hideCoordinates_{unique_id}() {{
+                    if (display_{unique_id}) {{
+                        display_{unique_id}.style.display = 'none';
+                    }}
+                }}
+                
+                function handleImageClick_{unique_id}(event) {{
+                    if (!img_{unique_id}) return;
+                    
+                    event.preventDefault();
+                    event.stopPropagation();
+                    
+                    const rect = img_{unique_id}.getBoundingClientRect();
+                    const scaleX = originalWidth_{unique_id} / rect.width;
+                    const scaleY = originalHeight_{unique_id} / rect.height;
+                    
+                    const x = Math.round((event.clientX - rect.left) * scaleX);
+                    const y = Math.round((event.clientY - rect.top) * scaleY);
+                    
+                    // 座標を表示範囲内に制限
+                    const clampedX = Math.max(0, Math.min(x, originalWidth_{unique_id} - 1));
+                    const clampedY = Math.max(0, Math.min(y, originalHeight_{unique_id} - 1));
+                    
+                    // URLパラメータを使用してStreamlitに座標を送信
+                    const timestamp = Date.now();
+                    const params = new URLSearchParams({{
+                        'click_x': clampedX.toString(),
+                        'click_y': clampedY.toString(),
+                        'image_key': '{image_key}',
+                        'timestamp': timestamp.toString()
+                    }});
+                    
+                    // Streamlitの親ウィンドウにURLパラメータを送信
+                    try {{
+                        // 最上位ウィンドウのURLを取得
+                        let targetWindow = window;
+                        let targetLocation = null;
+                        
+                        // 最上位ウィンドウを取得
+                        try {{
+                            if (window.top && window.top !== window) {{
+                                targetWindow = window.top;
+                                targetLocation = window.top.location;
+                            }} else if (window.parent && window.parent !== window) {{
+                                targetWindow = window.parent;
+                                targetLocation = window.parent.location;
+                            }} else {{
+                                targetLocation = window.location;
+                            }}
+                        }} catch (e) {{
+                            // クロスオリジンエラーの場合は現在のウィンドウを使用
+                            targetLocation = window.location;
+                        }}
+                        
+                        if (targetLocation) {{
+                            const currentUrl = targetLocation.href.split('?')[0];
+                            const newUrl = currentUrl + '?' + params.toString();
+                            targetLocation.href = newUrl;
+                        }}
+                    }} catch (e) {{
+                        console.error('URL更新エラー:', e);
+                        // フォールバック: 現在のウィンドウのURLを変更
+                        try {{
+                            const currentUrl = window.location.href.split('?')[0];
+                            const newUrl = currentUrl + '?' + params.toString();
+                            window.location.href = newUrl;
+                        }} catch (e2) {{
+                            console.error('フォールバックURL更新エラー:', e2);
+                        }}
+                    }}
+                }}
+                
+                // ページ読み込み時に初期化
+                if (document.readyState === 'loading') {{
+                    document.addEventListener('DOMContentLoaded', initImage_{unique_id});
+                }} else {{
+                    initImage_{unique_id}();
+                }}
+            }})();
         </script>
     </body>
     </html>
@@ -697,65 +702,75 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
     
     # URLパラメータからクリック座標を読み取る
     query_params = st.query_params
-    print(f"[DEBUG] query_params の内容: {dict(query_params)}")
-    print(f"[DEBUG] query_params のキー: {list(query_params.keys())}")
+    
+    # 処理済みクリックIDを追跡するキー
+    processed_click_key = f'processed_click_{image_key}'
+    
     if 'click_x' in query_params and 'click_y' in query_params and 'image_key' in query_params:
         click_image_key = query_params.get('image_key', '')
-        print(f"[DEBUG] URLパラメータから座標を受信: image_key={click_image_key}, 現在のimage_key={image_key}")
+        
         if click_image_key == image_key:
             try:
                 click_x = int(query_params.get('click_x', '0'))
                 click_y = int(query_params.get('click_y', '0'))
                 timestamp = query_params.get('timestamp', '0')
                 
-                print(f"[DEBUG] JavaScriptから送信された座標値:")
-                print(f"  - click_x (文字列): {query_params.get('click_x', '0')}")
-                print(f"  - click_y (文字列): {query_params.get('click_y', '0')}")
-                print(f"  - timestamp: {timestamp}")
-                print(f"  - click_x (整数): {click_x}")
-                print(f"  - click_y (整数): {click_y}")
-                
-                # 処理済みかどうかをチェック
-                click_id = f"{click_x}_{click_y}_{timestamp}"
-                if click_id not in st.session_state[f'processed_clicks_{image_key}']:
-                    # クリック回数を更新
-                    click_count = st.session_state[f'click_count_{image_key}']
+                # 座標が有効な範囲内かチェック
+                if 0 <= click_x <= image.width and 0 <= click_y <= image.height:
+                    # 処理済みかどうかをチェック（タイムスタンプを使用）
+                    click_id = f"{click_x}_{click_y}_{timestamp}"
+                    last_processed_id = st.session_state.get(processed_click_key, '')
                     
-                    print(f"[DEBUG] クリック回数: {click_count}, クリックID: {click_id}")
-                    
-                    # 1回目のクリックは左上、2回目のクリックは右下
-                    if click_count % 2 == 0:
-                        # 左上の点を設定
-                        current_points['top_left'] = (click_x, click_y)
-                        st.session_state[f'click_count_{image_key}'] = click_count + 1
-                        print(f"[DEBUG] 左上の点を設定: ({click_x}, {click_y})")
-                    else:
-                        # 右下の点を設定
-                        current_points['bottom_right'] = (click_x, click_y)
-                        st.session_state[f'click_count_{image_key}'] = click_count + 1
-                        print(f"[DEBUG] 右下の点を設定: ({click_x}, {click_y})")
-                    
-                    # セッション状態を更新
-                    st.session_state[f'current_points_{image_key}'] = current_points
-                    st.session_state[f'processed_clicks_{image_key}'].add(click_id)
-                    print(f"[DEBUG] セッション状態を更新: current_points={current_points}")
-                    
-                    # URLパラメータをクリア（次のクリックのために）
-                    # ただし、st.query_params.clear()は使わず、st.rerun()で更新
-                    st.rerun()
+                    if click_id != last_processed_id:
+                        # クリック回数を取得
+                        click_count = st.session_state[f'click_count_{image_key}']
+                        
+                        # 1回目のクリックは左上、2回目のクリックは右下
+                        if click_count % 2 == 0:
+                            # 左上の点を設定
+                            current_points['top_left'] = (click_x, click_y)
+                            st.session_state[f'click_count_{image_key}'] = click_count + 1
+                            st.success(f"✅ 左上の点を選択しました: ({click_x}, {click_y})")
+                        else:
+                            # 右下の点を設定
+                            current_points['bottom_right'] = (click_x, click_y)
+                            st.session_state[f'click_count_{image_key}'] = click_count + 1
+                            st.success(f"✅ 右下の点を選択しました: ({click_x}, {click_y})")
+                        
+                        # セッション状態を更新
+                        st.session_state[f'current_points_{image_key}'] = current_points
+                        st.session_state[processed_click_key] = click_id
+                        
+                        # 数値入力フィールドのセッション状態も更新
+                        if current_points['top_left']:
+                            st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
+                            st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
+                        if current_points['bottom_right']:
+                            st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
+                            st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
+                        
+                        # URLパラメータをクリアしてリロード
+                        # 新しいクエリパラメータを作成（クリックパラメータを除く）
+                        new_params = dict(query_params)
+                        new_params.pop('click_x', None)
+                        new_params.pop('click_y', None)
+                        new_params.pop('image_key', None)
+                        new_params.pop('timestamp', None)
+                        
+                        # クエリパラメータを更新
+                        st.query_params.clear()
+                        for key, value in new_params.items():
+                            if isinstance(value, list):
+                                for v in value:
+                                    st.query_params[key] = v
+                            else:
+                                st.query_params[key] = value
+                        
+                        st.rerun()
                 else:
-                    print(f"[DEBUG] このクリックは既に処理済みです: {click_id}")
+                    st.warning(f"⚠️ 座標が画像の範囲外です: ({click_x}, {click_y})")
             except (ValueError, TypeError) as e:
-                print(f"[DEBUG] 座標の変換エラー: {e}")
-                print(f"[DEBUG] エラー詳細: click_x={query_params.get('click_x', '0')}, click_y={query_params.get('click_y', '0')}")
-        else:
-            print(f"[DEBUG] image_keyが一致しません: 受信={click_image_key}, 期待={image_key}")
-    else:
-        # デバッグ用: URLパラメータの内容を確認
-        print(f"[DEBUG] URLパラメータに必要なキーがありません")
-        print(f"[DEBUG] 必要なキー: click_x, click_y, image_key")
-        print(f"[DEBUG] 現在のキー: {list(query_params.keys())}")
-        print(f"[DEBUG] すべてのquery_params: {dict(query_params)}")
+                st.error(f"座標の変換エラー: {e}")
     
     # 画像情報を表示
     st.info(f"📐 画像サイズ: 幅 {image.width}px × 高さ {image.height}px")
@@ -806,7 +821,7 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 
                 display_image = Image.fromarray(img_rgb)
         
-        # 画像を表示（クリックで座標を取得できるようにstreamlit-drawable-canvasを試行）
+        # 画像を表示（クリックで座標を取得できるようにst.components.v1.htmlを使用）
         # display_imageがPIL Imageであることを確認し、確実にPIL Imageに変換
         try:
             # 既にPIL Imageの場合はそのまま使用
@@ -833,143 +848,95 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             if final_display_image.mode != 'RGB':
                 final_display_image = final_display_image.convert('RGB')
             
-            # streamlit-drawable-canvasを試行（クリックで座標を取得）
+            # 画像サイズを適切にリサイズ（表示用）
+            # 大きすぎる画像は縮小して表示（最大幅1200px、アスペクト比を保持）
+            max_display_width = 1200
+            max_display_height = 800
+            
+            display_width = final_display_image.width
+            display_height = final_display_image.height
+            
+            # リサイズが必要かチェック
+            if display_width > max_display_width or display_height > max_display_height:
+                # アスペクト比を保持してリサイズ
+                scale = min(max_display_width / display_width, max_display_height / display_height)
+                display_width = int(display_width * scale)
+                display_height = int(display_height * scale)
+                display_image_resized = final_display_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+            else:
+                display_image_resized = final_display_image
+                scale = 1.0
+            
+            # スケールファクターをセッション状態に保存（座標変換用）
+            st.session_state[f'image_scale_{image_key}'] = scale
+            st.session_state[f'original_image_size_{image_key}'] = (final_display_image.width, final_display_image.height)
+            
+            # 選択された点を画像上に描画（PILを使用）
+            display_img_with_points = display_image_resized.copy()
+            from PIL import ImageDraw
+            
+            if current_points['top_left'] is not None:
+                x, y = current_points['top_left']
+                # 表示用画像の座標に変換
+                display_x = int(x * scale) if scale != 1.0 else x
+                display_y = int(y * scale) if scale != 1.0 else y
+                # 点を描画（赤色の円）
+                draw = ImageDraw.Draw(display_img_with_points)
+                draw.ellipse([display_x - 8, display_y - 8, display_x + 8, display_y + 8], fill=(255, 0, 0), outline=(255, 0, 0), width=2)
+            
+            if current_points['bottom_right'] is not None:
+                x, y = current_points['bottom_right']
+                # 表示用画像の座標に変換
+                display_x = int(x * scale) if scale != 1.0 else x
+                display_y = int(y * scale) if scale != 1.0 else y
+                # 点を描画（緑色の円）
+                draw = ImageDraw.Draw(display_img_with_points)
+                draw.ellipse([display_x - 8, display_y - 8, display_x + 8, display_y + 8], fill=(0, 255, 0), outline=(0, 255, 0), width=2)
+            
+            # 2点が選択されている場合は矩形を描画
+            if current_points['top_left'] is not None and current_points['bottom_right'] is not None:
+                x1, y1 = current_points['top_left']
+                x2, y2 = current_points['bottom_right']
+                # 表示用画像の座標に変換
+                display_x1 = int(x1 * scale) if scale != 1.0 else x1
+                display_y1 = int(y1 * scale) if scale != 1.0 else y1
+                display_x2 = int(x2 * scale) if scale != 1.0 else x2
+                display_y2 = int(y2 * scale) if scale != 1.0 else y2
+                # 矩形を描画（マゼンタ色）
+                draw = ImageDraw.Draw(display_img_with_points)
+                draw.rectangle([display_x1, display_y1, display_x2, display_y2], outline=(255, 0, 255), width=2)
+            
+            # st.components.v1.htmlを使用して画像を表示し、クリック座標を取得
             try:
-                from streamlit_drawable_canvas import st_canvas
-                
-                st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
-                st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
-                
-                # 画像サイズを適切にリサイズ（表示用）
-                # 大きすぎる画像は縮小して表示（最大幅800px、アスペクト比を保持）
-                max_display_width = 800
-                max_display_height = 600
-                
-                display_width = final_display_image.width
-                display_height = final_display_image.height
-                
-                # リサイズが必要かチェック
-                if display_width > max_display_width or display_height > max_display_height:
-                    # アスペクト比を保持してリサイズ
-                    scale = min(max_display_width / display_width, max_display_height / display_height)
-                    display_width = int(display_width * scale)
-                    display_height = int(display_height * scale)
-                    canvas_image = final_display_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
-                else:
-                    canvas_image = final_display_image
-                    scale = 1.0
-                
-                # スケールファクターをセッション状態に保存（座標変換用）
-                st.session_state[f'image_scale_{image_key}'] = scale
-                st.session_state[f'original_image_size_{image_key}'] = (final_display_image.width, final_display_image.height)
-                
-                # 前回のクリック数を取得（重複処理を防ぐため）
-                last_click_count_key = f'last_click_count_{image_key}'
-                if last_click_count_key not in st.session_state:
-                    st.session_state[last_click_count_key] = 0
-                
-                # 通常の画像表示（画像が確実に表示されるように）
-                # 画像上に選択された点を描画
-                display_img_with_points = canvas_image.copy()
-                if current_points['top_left']:
-                    x, y = current_points['top_left']
-                    # 表示用画像の座標に変換
-                    display_x = int(x * scale) if scale != 1.0 else x
-                    display_y = int(y * scale) if scale != 1.0 else y
-                    # 点を描画（簡易版：PILで描画）
-                    from PIL import ImageDraw
-                    draw = ImageDraw.Draw(display_img_with_points)
-                    draw.ellipse([display_x - 5, display_y - 5, display_x + 5, display_y + 5], fill=(255, 0, 0), outline=(255, 0, 0))
-                
-                if current_points['bottom_right']:
-                    x, y = current_points['bottom_right']
-                    # 表示用画像の座標に変換
-                    display_x = int(x * scale) if scale != 1.0 else x
-                    display_y = int(y * scale) if scale != 1.0 else y
-                    # 点を描画
-                    from PIL import ImageDraw
-                    draw = ImageDraw.Draw(display_img_with_points)
-                    draw.ellipse([display_x - 5, display_y - 5, display_x + 5, display_y + 5], fill=(0, 255, 0), outline=(0, 255, 0))
-                
-                # 通常の画像表示
-                try:
-                    st.image(display_img_with_points, caption="画像プレビュー（クリックで座標を選択）", use_container_width=True)
-                except TypeError:
-                    st.image(display_img_with_points, caption="画像プレビュー（クリックで座標を選択）", use_column_width=True)
-                
-                # キャンバスを作成（ポイントモードでクリックを検出）
-                # update_streamlit=Trueにして、クリックを検出できるようにする
-                canvas_result = st_canvas(
-                    fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
-                    stroke_width=2,
-                    stroke_color="#FF0000",  # 線の色（赤）
-                    background_image=canvas_image,
-                    update_streamlit=True,  # クリックを検出するためにTrueに設定
-                    height=display_height,
-                    width=display_width,
-                    drawing_mode="point",  # ポイントモードでクリックを検出
-                    point_display_radius=5,  # ポイントの表示半径
-                    key=f"canvas_{image_key}",
-                )
-                
-                # クリックされた座標を取得
-                if canvas_result.json_data is not None:
-                    objects = canvas_result.json_data.get("objects", [])
-                    current_click_count = len(objects)
+                # st.components.v1が利用可能かチェック
+                if hasattr(st.components, 'v1') and hasattr(st.components.v1, 'html'):
+                    html_content = create_image_with_coord_display(display_img_with_points, image_key)
+                    # 高さを適切に設定（画像の高さ + 余白）
+                    display_height_html = min(display_height + 100, 1000)
                     
-                    # クリック数が増えた場合のみ処理（重複処理を防ぐ）
-                    if current_click_count > st.session_state[last_click_count_key]:
-                        if objects:
-                            # 最新の2つのポイントを取得
-                            # 表示用画像の座標を元の画像座標に変換
-                            points = []
-                            for obj in objects[-2:]:
-                                # 表示用画像の座標
-                                display_x = int(obj["left"])
-                                display_y = int(obj["top"])
-                                # 元の画像座標に変換
-                                orig_x = int(display_x / scale) if scale != 1.0 else display_x
-                                orig_y = int(display_y / scale) if scale != 1.0 else display_y
-                                points.append((orig_x, orig_y))
-                            
-                            if len(points) >= 1:
-                                # 1回目のクリック: 左上の点
-                                current_points['top_left'] = points[0]
-                                if len(points) >= 2:
-                                    # 2回目のクリック: 右下の点
-                                    current_points['bottom_right'] = points[1]
-                                
-                                # セッション状態を更新
-                                st.session_state[f'current_points_{image_key}'] = current_points
-                                
-                                # 数値入力フィールドのセッション状態も更新
-                                if current_points['top_left']:
-                                    st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
-                                    st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
-                                if current_points['bottom_right']:
-                                    st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
-                                    st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
-                                
-                                # クリック数を更新
-                                st.session_state[last_click_count_key] = current_click_count
-                                
-                                # 座標が更新されたことを示すフラグを設定（リロードはst_canvasのupdate_streamlitで自動的に行われる）
-                                # ただし、無限ループを防ぐため、座標が変更された場合のみ処理
-                                if (current_points['top_left'] != st.session_state.get(f'last_top_left_{image_key}') or
-                                    current_points['bottom_right'] != st.session_state.get(f'last_bottom_right_{image_key}')):
-                                    st.session_state[f'last_top_left_{image_key}'] = current_points['top_left']
-                                    st.session_state[f'last_bottom_right_{image_key}'] = current_points['bottom_right']
-                
-            except (ImportError, AttributeError, Exception) as canvas_error:
-                # streamlit-drawable-canvasが利用できない場合は、通常の画像表示にフォールバック
+                    if display_height_html <= 0:
+                        display_height_html = 600  # デフォルト値
+                    
+                    st.components.v1.html(html_content, height=display_height_html, scrolling=False)
+                else:
+                    # st.components.v1.htmlが利用できない場合は、通常の画像表示にフォールバック
+                    raise AttributeError("st.components.v1.html is not available")
+            except (AttributeError, ImportError, Exception) as html_error:
+                # st.components.v1.htmlが利用できない場合は、通常の画像表示にフォールバック
                 st.warning("⚠️ クリック座標取得機能が利用できません。数値入力フィールドで座標を指定してください。")
+                
+                # エラーの詳細を表示（デバッグ用、本番環境では削除可能）
+                import traceback
+                error_details = traceback.format_exc()
+                with st.expander("エラー詳細（デバッグ用）", expanded=False):
+                    st.code(error_details)
                 
                 # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
                 try:
-                    st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
                 except TypeError:
                     # 古いStreamlitバージョンではuse_column_widthを使用
-                    st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
+                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
         except Exception as e:
             st.error(f"画像表示エラー: {e}")
             import traceback
