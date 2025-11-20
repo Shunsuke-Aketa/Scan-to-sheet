@@ -657,101 +657,36 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                     console.log('[CLICK] 元の画像サイズ:', originalWidth_{unique_id}, originalHeight_{unique_id});
                     console.log('[CLICK] 表示画像サイズ:', displayWidth_{unique_id}, displayHeight_{unique_id});
                     
-                    // URLパラメータを使用してStreamlitに座標を送信
+                    // postMessageを使用してStreamlitに座標を送信（推奨方法）
                     const timestamp = Date.now();
-                    const params = new URLSearchParams({{
-                        'click_x': clampedX.toString(),
-                        'click_y': clampedY.toString(),
-                        'image_key': '{image_key}',
-                        'timestamp': timestamp.toString()
-                    }});
+                    const messageData = {{
+                        type: 'image_click',
+                        click_x: clampedX,
+                        click_y: clampedY,
+                        image_key: '{image_key}',
+                        timestamp: timestamp
+                    }};
                     
-                    console.log('[CLICK] URLパラメータ:', params.toString());
+                    console.log('[CLICK] postMessageで送信:', messageData);
                     
-                    // Streamlitの親ウィンドウにURLパラメータを送信
-                    // iframe内から親ウィンドウのURLを変更する必要がある
-                    // セキュリティ制限により、複数の方法を試行する
-                    let urlUpdated = false;
-                    
-                    // 方法1: window.top.location.hrefを使用（最優先：親ウィンドウのURLを直接変更）
+                    // 方法1: window.parent.postMessageを使用（推奨）
                     try {{
-                        if (window.top && window.top !== window) {{
-                            const currentUrl = window.top.location.href.split('?')[0];
-                            const newUrl = currentUrl + '?' + params.toString();
-                            console.log('[CLICK] window.top.location.hrefを更新:', newUrl);
-                            console.log('[CLICK] 現在のwindow.top.location.href:', window.top.location.href);
-                            window.top.location.href = newUrl;
-                            urlUpdated = true;
-                            console.log('[CLICK] window.top.location.hrefでURLを更新しました');
+                        if (window.parent && window.parent !== window) {{
+                            window.parent.postMessage(messageData, '*');
+                            console.log('[CLICK] window.parent.postMessageで送信しました');
                         }}
                     }} catch (e) {{
-                        console.log('[CLICK] window.top.location.hrefエラー（セキュリティ制限の可能性）:', e);
-                        console.log('[CLICK] エラー詳細:', e.message);
+                        console.log('[CLICK] window.parent.postMessageエラー:', e);
                     }}
                     
-                    // 方法2: window.parent.location.hrefを使用（フォールバック）
-                    if (!urlUpdated) {{
-                        try {{
-                            if (window.parent && window.parent !== window) {{
-                                const currentUrl = window.parent.location.href.split('?')[0];
-                                const newUrl = currentUrl + '?' + params.toString();
-                                console.log('[CLICK] window.parent.location.hrefを更新:', newUrl);
-                                console.log('[CLICK] 現在のwindow.parent.location.href:', window.parent.location.href);
-                                window.parent.location.href = newUrl;
-                                urlUpdated = true;
-                                console.log('[CLICK] window.parent.location.hrefでURLを更新しました');
-                            }}
-                        }} catch (e) {{
-                            console.log('[CLICK] window.parent.location.hrefエラー（セキュリティ制限の可能性）:', e);
-                            console.log('[CLICK] エラー詳細:', e.message);
+                    // 方法2: window.top.postMessageを使用（フォールバック）
+                    try {{
+                        if (window.top && window.top !== window) {{
+                            window.top.postMessage(messageData, '*');
+                            console.log('[CLICK] window.top.postMessageで送信しました');
                         }}
-                    }}
-                    
-                    // 方法3: window.parent.postMessageを使用（フォールバック）
-                    if (!urlUpdated) {{
-                        try {{
-                            if (window.parent && window.parent !== window) {{
-                                window.parent.postMessage({{
-                                    type: 'streamlit:setComponentValue',
-                                    value: {{
-                                        click_x: clampedX,
-                                        click_y: clampedY,
-                                        image_key: '{image_key}',
-                                        timestamp: timestamp
-                                    }}
-                                }}, '*');
-                                console.log('[CLICK] postMessageで送信しました');
-                                // postMessageは非同期なので、urlUpdatedは設定しない
-                            }}
-                        }} catch (e) {{
-                            console.log('[CLICK] postMessageエラー:', e);
-                        }}
-                    }}
-                    
-                    // 方法4: window.location.hrefを使用（最後の手段：iframe内のURLを変更）
-                    // 注意: これは親ウィンドウのURLを変更しないため、Streamlit側で検出できない可能性がある
-                    if (!urlUpdated) {{
-                        try {{
-                            const currentUrl = window.location.href;
-                            const baseUrl = currentUrl.split('?')[0];
-                            const newUrl = baseUrl + '?' + params.toString();
-                            
-                            console.log('[CLICK] 現在のURL（iframe内）:', currentUrl);
-                            console.log('[CLICK] 新しいURL（iframe内）:', newUrl);
-                            console.log('[CLICK] 警告: iframe内のURLを変更しています。親ウィンドウのURLは変更されません。');
-                            
-                            // URLを変更（これによりページがリロードされる）
-                            window.location.href = newUrl;
-                            urlUpdated = true;
-                            console.log('[CLICK] window.location.hrefでURLを更新しました（iframe内）');
-                        }} catch (e) {{
-                            console.error('[CLICK] window.location.hrefエラー:', e);
-                        }}
-                    }}
-                    
-                    if (!urlUpdated) {{
-                        console.error('[CLICK] すべてのURL更新方法が失敗しました。セキュリティ制限により、iframe内から親ウィンドウのURLを変更できません。');
-                        alert('座標の送信に失敗しました。ブラウザのセキュリティ制限により、iframe内からURLを変更できません。\\n座標: (' + clampedX + ', ' + clampedY + ')\\n手動で数値入力フィールドに入力してください。');
+                    }} catch (e) {{
+                        console.log('[CLICK] window.top.postMessageエラー:', e);
                     }}
                 }}
                 
@@ -766,6 +701,83 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                 }} else {{
                     initCanvas_{unique_id}();
                 }}
+            }})();
+        </script>
+    </body>
+    </html>
+    """
+    return html
+
+
+def create_message_listener(image_key: str) -> str:
+    """
+    postMessageを受信し、URLパラメータに変換してStreamlitに通知するHTMLコンポーネントを作成
+    
+    Args:
+        image_key: セッション状態で管理するキー
+    
+    Returns:
+        HTML文字列
+    """
+    unique_id = image_key.replace(" ", "_").replace(".", "_").replace("/", "_").replace("\\", "_")
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+    </head>
+    <body>
+        <script>
+            (function() {{
+                'use strict';
+                
+                console.log('[MESSAGE_LISTENER] メッセージリスナーを初期化: image_key={image_key}');
+                
+                // postMessageを受信
+                window.addEventListener('message', function(event) {{
+                    console.log('[MESSAGE_LISTENER] メッセージを受信:', event.data);
+                    
+                    // メッセージのタイプをチェック
+                    if (event.data && event.data.type === 'image_click') {{
+                        const data = event.data;
+                        console.log('[MESSAGE_LISTENER] クリック座標を受信:', data);
+                        
+                        // URLパラメータを作成
+                        const params = new URLSearchParams({{
+                            'click_x': data.click_x.toString(),
+                            'click_y': data.click_y.toString(),
+                            'image_key': data.image_key,
+                            'timestamp': data.timestamp.toString()
+                        }});
+                        
+                        console.log('[MESSAGE_LISTENER] URLパラメータを作成:', params.toString());
+                        
+                        // 親ウィンドウのURLを更新
+                        try {{
+                            if (window.top && window.top !== window) {{
+                                const currentUrl = window.top.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[MESSAGE_LISTENER] window.top.location.hrefを更新:', newUrl);
+                                window.top.location.href = newUrl;
+                            }} else if (window.parent && window.parent !== window) {{
+                                const currentUrl = window.parent.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[MESSAGE_LISTENER] window.parent.location.hrefを更新:', newUrl);
+                                window.parent.location.href = newUrl;
+                            }} else {{
+                                const currentUrl = window.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[MESSAGE_LISTENER] window.location.hrefを更新:', newUrl);
+                                window.location.href = newUrl;
+                            }}
+                        }} catch (e) {{
+                            console.error('[MESSAGE_LISTENER] URL更新エラー:', e);
+                        }}
+                    }}
+                }}, false);
+                
+                console.log('[MESSAGE_LISTENER] メッセージリスナーが設定されました');
             }})();
         </script>
     </body>
@@ -1351,7 +1363,14 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
             
             try:
-                # カスタムHTMLコンポーネントを作成
+                # メッセージリスナーコンポーネントを追加（postMessageを受信するため）
+                listener_html = create_message_listener(image_key)
+                try:
+                    st.components.v1.html(listener_html, height=1, scrolling=False)
+                except AttributeError:
+                    pass  # エラーが発生しても続行
+                
+                # カスタムHTMLコンポーネントを作成（画像表示とクリック検出）
                 html_content = create_canvas_with_background_image(
                     display_image_resized,
                     image_key,
