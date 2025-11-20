@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR文字認識アプリ - リダイレクト中...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.5em;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .manual-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+
+        .manual-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>リダイレクト中...</h1>
+        <p>OCR文字認識アプリに移動しています。</p>
+        <p>自動的に移動しない場合は、<a href="#" id="manualLink" class="manual-link">こちらをクリック</a>してください。</p>
+    </div>
+
+    <script>
+        // TODO: YOUR_STREAMLIT_APP_URL を実際のStreamlit CloudのURLに置き換えてください
+        const STREAMLIT_APP_URL = 'https://YOUR_STREAMLIT_APP_URL.streamlit.app';
+
+        // 手動リンクを設定
+        document.getElementById('manualLink').href = STREAMLIT_APP_URL;
+
+        // 3秒後に自動リダイレクト
+        setTimeout(function() {
+            if (STREAMLIT_APP_URL.includes('YOUR_STREAMLIT_APP_URL')) {
+                alert('StreamlitアプリのURLが設定されていません。ocr-app-redirect.htmlのSTREAMLIT_APP_URLを更新してください。');
+            } else {
+                window.location.href = STREAMLIT_APP_URL;
+            }
+        }, 3000);
+
+        // 即座にリダイレクトする場合は、以下のコメントを外してください
+        // window.location.href = STREAMLIT_APP_URL;
+    </script>
+</body>
+</html>
+

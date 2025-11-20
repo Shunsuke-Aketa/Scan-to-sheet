@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR文字認識アプリ - Scan To Sheet</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .description {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .app-link {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: transform 0.3s, box-shadow 0.3s;
+            margin: 10px;
+        }
+
+        .app-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .app-link:active {
+            transform: translateY(0);
+        }
+
+        .features {
+            margin-top: 40px;
+            text-align: left;
+        }
+
+        .features h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .features ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .features li {
+            color: #666;
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .note {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 10px;
+            color: #555;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 OCR文字認識アプリ</h1>
+        <p class="description">
+            画像やPDFから文字を抽出し、Excel/CSVファイルに出力するWebアプリケーションです。
+        </p>
+
+        <!-- Streamlitアプリへのリンク -->
+        <!-- TODO: YOUR_STREAMLIT_APP_URL を実際のStreamlit CloudのURLに置き換えてください -->
+        <a href="https://YOUR_STREAMLIT_APP_URL.streamlit.app" 
+           target="_blank" 
+           class="app-link"
+           id="appLink">
+            🚀 アプリを開く
+        </a>
+
+        <div class="features">
+            <h2>主な機能</h2>
+            <ul>
+                <li>画像・PDFファイルに対応</li>
+                <li>複数ファイルの一括処理</li>
+                <li>日本語・英語の同時認識</li>
+                <li>範囲指定による抽出</li>
+                <li>Excel/CSV形式での出力</li>
+                <li>AI搭載OCRエンジン（EasyOCR）対応</li>
+            </ul>
+        </div>
+
+        <div class="note">
+            <strong>注意:</strong> このアプリは別ウィンドウで開きます。初回起動時はモデルのダウンロードに時間がかかる場合があります。
+        </div>
+
+        <!-- 既存サイトへの戻るリンク -->
+        <a href="index.html" class="back-link">← トップページに戻る</a>
+    </div>
+
+    <script>
+        // ページ読み込み時にStreamlitアプリのURLを確認
+        window.addEventListener('DOMContentLoaded', function() {
+            const appLink = document.getElementById('appLink');
+            const href = appLink.getAttribute('href');
+            
+            if (href.includes('YOUR_STREAMLIT_APP_URL')) {
+                console.warn('StreamlitアプリのURLが設定されていません。ocr-app.htmlのhref属性を更新してください。');
+            }
+        });
+    </script>
+</body>
+</html>
+
