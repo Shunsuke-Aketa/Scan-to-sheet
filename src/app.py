@@ -657,36 +657,71 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                     console.log('[CLICK] 元の画像サイズ:', originalWidth_{unique_id}, originalHeight_{unique_id});
                     console.log('[CLICK] 表示画像サイズ:', displayWidth_{unique_id}, displayHeight_{unique_id});
                     
-                    // postMessageを使用してStreamlitに座標を送信（推奨方法）
+                    // URLパラメータを作成してStreamlitに座標を送信
                     const timestamp = Date.now();
-                    const messageData = {{
-                        type: 'image_click',
-                        click_x: clampedX,
-                        click_y: clampedY,
-                        image_key: '{image_key}',
-                        timestamp: timestamp
-                    }};
+                    const params = new URLSearchParams({{
+                        'click_x': clampedX.toString(),
+                        'click_y': clampedY.toString(),
+                        'image_key': '{image_key}',
+                        'timestamp': timestamp.toString()
+                    }});
                     
-                    console.log('[CLICK] postMessageで送信:', messageData);
+                    console.log('[CLICK] URLパラメータ:', params.toString());
                     
-                    // 方法1: window.parent.postMessageを使用（推奨）
-                    try {{
-                        if (window.parent && window.parent !== window) {{
-                            window.parent.postMessage(messageData, '*');
-                            console.log('[CLICK] window.parent.postMessageで送信しました');
-                        }}
-                    }} catch (e) {{
-                        console.log('[CLICK] window.parent.postMessageエラー:', e);
-                    }}
+                    // 親ウィンドウのURLを更新（複数の方法を試行）
+                    let urlUpdated = false;
                     
-                    // 方法2: window.top.postMessageを使用（フォールバック）
+                    // 方法1: window.top.location.hrefを使用（最優先）
                     try {{
                         if (window.top && window.top !== window) {{
-                            window.top.postMessage(messageData, '*');
-                            console.log('[CLICK] window.top.postMessageで送信しました');
+                            const currentUrl = window.top.location.href.split('?')[0];
+                            const newUrl = currentUrl + '?' + params.toString();
+                            console.log('[CLICK] window.top.location.hrefを更新:', newUrl);
+                            window.top.location.href = newUrl;
+                            urlUpdated = true;
+                            console.log('[CLICK] window.top.location.hrefでURLを更新しました');
                         }}
                     }} catch (e) {{
-                        console.log('[CLICK] window.top.postMessageエラー:', e);
+                        console.log('[CLICK] window.top.location.hrefエラー（セキュリティ制限の可能性）:', e);
+                    }}
+                    
+                    // 方法2: window.parent.location.hrefを使用（フォールバック）
+                    if (!urlUpdated) {{
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                const currentUrl = window.parent.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[CLICK] window.parent.location.hrefを更新:', newUrl);
+                                window.parent.location.href = newUrl;
+                                urlUpdated = true;
+                                console.log('[CLICK] window.parent.location.hrefでURLを更新しました');
+                            }}
+                        }} catch (e) {{
+                            console.log('[CLICK] window.parent.location.hrefエラー（セキュリティ制限の可能性）:', e);
+                        }}
+                    }}
+                    
+                    // 方法3: postMessageを使用（フォールバック）
+                    if (!urlUpdated) {{
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                window.parent.postMessage({{
+                                    type: 'image_click',
+                                    click_x: clampedX,
+                                    click_y: clampedY,
+                                    image_key: '{image_key}',
+                                    timestamp: timestamp
+                                }}, '*');
+                                console.log('[CLICK] postMessageで送信しました（URL更新が失敗したため）');
+                            }}
+                        }} catch (e) {{
+                            console.log('[CLICK] postMessageエラー:', e);
+                        }}
+                    }}
+                    
+                    if (!urlUpdated) {{
+                        console.error('[CLICK] すべてのURL更新方法が失敗しました。セキュリティ制限により、iframe内から親ウィンドウのURLを変更できません。');
+                        alert('座標の送信に失敗しました。ブラウザのセキュリティ制限により、iframe内からURLを変更できません。\\n座標: (' + clampedX + ', ' + clampedY + ')\\n手動で数値入力フィールドに入力してください。');
                     }}
                 }}
                 
@@ -1363,13 +1398,6 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
             
             try:
-                # メッセージリスナーコンポーネントを追加（postMessageを受信するため）
-                listener_html = create_message_listener(image_key)
-                try:
-                    st.components.v1.html(listener_html, height=1, scrolling=False)
-                except AttributeError:
-                    pass  # エラーが発生しても続行
-                
                 # カスタムHTMLコンポーネントを作成（画像表示とクリック検出）
                 html_content = create_canvas_with_background_image(
                     display_image_resized,
