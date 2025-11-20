@@ -807,24 +807,39 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 display_image = Image.fromarray(img_rgb)
         
         # 画像を表示（Streamlit Cloudではst.components.v1.htmlが利用できないため、st.imageを使用）
-        # display_imageがPIL Imageであることを確認
-        if isinstance(display_image, Image.Image):
-            st.image(display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
-        else:
-            # numpy配列の場合はPIL Imageに変換
-            try:
-                if isinstance(display_image, np.ndarray):
-                    if len(display_image.shape) == 3:
-                        # BGRからRGBに変換（OpenCV形式の場合）
-                        if CV2_AVAILABLE and cv2 is not None:
-                            display_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
-                        display_image = Image.fromarray(display_image)
-                    else:
-                        display_image = Image.fromarray(display_image)
-                st.image(display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
-            except Exception as e:
-                st.error(f"画像表示エラー: {e}")
-                st.info("画像の表示に失敗しました。数値入力フィールドで座標を指定してください。")
+        # display_imageがPIL Imageであることを確認し、確実にPIL Imageに変換
+        try:
+            # 既にPIL Imageの場合はそのまま使用
+            if isinstance(display_image, Image.Image):
+                final_display_image = display_image
+            elif isinstance(display_image, np.ndarray):
+                # numpy配列の場合はPIL Imageに変換
+                if len(display_image.shape) == 3:
+                    # BGRからRGBに変換（OpenCV形式の場合）
+                    if CV2_AVAILABLE and cv2 is not None:
+                        display_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
+                    final_display_image = Image.fromarray(display_image)
+                else:
+                    final_display_image = Image.fromarray(display_image)
+            else:
+                # その他の型の場合はエラー
+                raise TypeError(f"Unsupported image type: {type(display_image)}")
+            
+            # PIL Imageを確実にPIL Imageとして扱う
+            if not isinstance(final_display_image, Image.Image):
+                raise TypeError(f"Failed to convert to PIL Image: {type(final_display_image)}")
+            
+            # PIL ImageをRGBモードに変換（Streamlit Cloudでの互換性のため）
+            if final_display_image.mode != 'RGB':
+                final_display_image = final_display_image.convert('RGB')
+            
+            # st.imageに渡す
+            st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+        except Exception as e:
+            st.error(f"画像表示エラー: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+            st.info("画像の表示に失敗しました。数値入力フィールドで座標を指定してください。")
         
         # 範囲が登録されている場合は可視化した画像も表示
         if regions:
