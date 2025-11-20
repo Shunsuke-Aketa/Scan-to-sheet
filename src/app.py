@@ -51,11 +51,13 @@ st.set_page_config(
 )
 
 # セッション状態の初期化
+# EasyOCRが利用可能な場合はデフォルトでEasyOCRを使用（Streamlit Cloud対応）
+default_engine = 'easyocr' if EASYOCR_AVAILABLE else 'tesseract'
 if 'extractor' not in st.session_state:
-    st.session_state.extractor = OCRExtractor(lang='eng+jpn', ocr_engine='tesseract')
+    st.session_state.extractor = OCRExtractor(lang='eng+jpn', ocr_engine=default_engine)
 
 if 'ocr_engine' not in st.session_state:
-    st.session_state.ocr_engine = 'tesseract'
+    st.session_state.ocr_engine = default_engine
 
 if 'uploaded_files' not in st.session_state:
     st.session_state.uploaded_files = []
@@ -1119,12 +1121,13 @@ def main():
     with st.sidebar:
         st.header("設定")
         
-        # 日本語データの状態をチェック
+        # 日本語データの状態をチェック（Tesseractが利用可能な場合のみ）
         tesseract_path = get_tesseract_path()
-        tessdata_path = get_tessdata_path(tesseract_path)
-        has_jpn_data = check_japanese_data(tessdata_path)
+        tessdata_path = get_tessdata_path(tesseract_path) if tesseract_path else None
+        has_jpn_data = check_japanese_data(tessdata_path) if tessdata_path else False
         
-        if not has_jpn_data:
+        # Tesseractが利用可能で、日本語データがない場合のみ警告を表示
+        if tesseract_path and not has_jpn_data:
             st.error("⚠️ 日本語データが見つかりません")
             with st.expander("📋 インストール手順", expanded=True):
                 st.markdown("""
@@ -1135,37 +1138,59 @@ def main():
                 
                 2. **配置場所**
                 """)
-                if tesseract_path:
-                    jpn_data_path = os.path.join(os.path.dirname(tesseract_path), 'tessdata', 'jpn.traineddata')
-                    st.code(jpn_data_path, language=None)
-                else:
-                    st.code("Tesseractのインストールディレクトリ\\tessdata\\jpn.traineddata", language=None)
+                jpn_data_path = os.path.join(os.path.dirname(tesseract_path), 'tessdata', 'jpn.traineddata')
+                st.code(jpn_data_path, language=None)
                 
                 st.markdown("""
                 3. **再起動**
                    - ファイルを配置した後、アプリを再起動してください
                 
-                **注意**: 現在は英語のみで認識されます。
+                **💡 ヒント**: EasyOCRを使用すると、日本語データのインストール不要で日本語OCRが利用できます。
                 """)
-        else:
+        elif tesseract_path and has_jpn_data:
             st.success("✓ 日本語データが利用可能です")
+        elif not tesseract_path:
+            # Tesseractが利用できない環境（Streamlit Cloudなど）では、EasyOCRを推奨
+            if EASYOCR_AVAILABLE:
+                st.info("💡 **EasyOCRを使用中**: 日本語OCRが利用可能です（追加設定不要）")
+            else:
+                st.warning("⚠️ Tesseractが利用できません。EasyOCRのインストールを推奨します。")
         
         # OCRエンジン設定
         st.subheader("OCRエンジン設定")
-        ocr_engine_options = ['Tesseract (標準)']
+        ocr_engine_options = []
         if EASYOCR_AVAILABLE:
-            ocr_engine_options.append('EasyOCR (AI搭載・高精度)')
+            ocr_engine_options.append('EasyOCR (AI搭載・高精度・推奨)')
         else:
             ocr_engine_options.append('EasyOCR (AI搭載・高精度) - 未インストール')
         
+        # Tesseractが利用可能な場合のみオプションに追加
+        tesseract_path = get_tesseract_path()
+        if tesseract_path:
+            ocr_engine_options.append('Tesseract (標準)')
+        
         # 現在のエンジンに応じてインデックスを設定
         current_engine_index = 0
-        if st.session_state.ocr_engine == 'easyocr':
-            if EASYOCR_AVAILABLE:
-                current_engine_index = 1
+        if st.session_state.ocr_engine == 'tesseract':
+            if tesseract_path and EASYOCR_AVAILABLE:
+                current_engine_index = 1  # Tesseractが2番目
+            elif not EASYOCR_AVAILABLE and tesseract_path:
+                current_engine_index = 0  # Tesseractのみ
             else:
-                current_engine_index = 0  # EasyOCRが利用できない場合はTesseractに戻す
-                st.session_state.ocr_engine = 'tesseract'
+                # Tesseractが利用できない場合はEasyOCRに強制
+                if EASYOCR_AVAILABLE:
+                    st.session_state.ocr_engine = 'easyocr'
+                    current_engine_index = 0
+                else:
+                    st.error("⚠️ OCRエンジンが利用できません。")
+        elif st.session_state.ocr_engine == 'easyocr':
+            if EASYOCR_AVAILABLE:
+                current_engine_index = 0  # EasyOCRが1番目
+            else:
+                # EasyOCRが利用できない場合はTesseractに戻す（利用可能な場合）
+                if tesseract_path:
+                    st.session_state.ocr_engine = 'tesseract'
+                    current_engine_index = 0
         
         selected_engine_display = st.selectbox(
             "OCRエンジン",
@@ -1218,9 +1243,12 @@ def main():
             # EasyOCRを使用している場合は、言語変更に応じて再初期化が必要な場合がある
             # ただし、EasyOCRは実行時に言語を変更できるため、ここではlangのみ更新
         
-        # 日本語データがない場合は警告を表示（Tesseract使用時のみ）
-        if st.session_state.ocr_engine == 'tesseract' and not has_jpn_data and selected_lang in ['日本語+英語', '日本語のみ']:
+        # 日本語データがない場合は警告を表示（Tesseract使用時のみ、かつTesseractが利用可能な場合）
+        if (st.session_state.ocr_engine == 'tesseract' and tesseract_path and 
+            not has_jpn_data and selected_lang in ['日本語+英語', '日本語のみ']):
             st.warning("⚠️ 日本語データがインストールされていないため、英語のみで認識されます。")
+            if EASYOCR_AVAILABLE:
+                st.info("💡 EasyOCRに切り替えると、日本語データのインストール不要で日本語OCRが利用できます。")
         
         # PDF処理設定
         st.subheader("PDF設定")
