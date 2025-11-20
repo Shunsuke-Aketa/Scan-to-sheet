@@ -965,7 +965,23 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             st.session_state[f'image_scale_{image_key}'] = scale
             st.session_state[f'original_image_size_{image_key}'] = (final_display_image.width, final_display_image.height)
             
-            # 選択された点を画像上に描画（PILを使用）
+            # キャンバスの背景画像として使用する画像を準備
+            # 注意: st_canvasのbackground_imageには、選択された点を描画する前の元の画像を使用する
+            # 選択された点はst_canvasのpointモードで自動的に描画されるため、ここでは描画しない
+            canvas_background_image = display_image_resized.copy()
+            
+            # デバッグ: 画像が正しく準備されているか確認
+            print(f"[DEBUG] canvas_background_image の型: {type(canvas_background_image)}")
+            print(f"[DEBUG] canvas_background_image のサイズ: {canvas_background_image.width} x {canvas_background_image.height}")
+            print(f"[DEBUG] canvas_background_image のモード: {canvas_background_image.mode}")
+            
+            # 画像をRGBモードに変換（streamlit-drawable-canvasが正しく表示するために必要）
+            if canvas_background_image.mode != 'RGB':
+                canvas_background_image = canvas_background_image.convert('RGB')
+                print(f"[DEBUG] 画像をRGBモードに変換しました")
+            
+            # 選択された点を画像上に描画（視覚的フィードバック用、PILを使用）
+            # 注意: これはst_canvasの背景画像には使用しない（st_canvasが自動的に描画するため）
             display_img_with_points = display_image_resized.copy()
             from PIL import ImageDraw
             
@@ -1014,22 +1030,24 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 
                 # streamlit-drawable-canvasでクリック座標を取得
                 # 注意: widthとheightは画像の実際のサイズ（ピクセル単位）に正確に合わせる必要がある
-                # display_img_with_pointsのサイズを使用
-                canvas_width = display_img_with_points.width
-                canvas_height = display_img_with_points.height
+                # canvas_background_imageのサイズを使用
+                canvas_width = canvas_background_image.width
+                canvas_height = canvas_background_image.height
                 
                 print(f"[DEBUG] canvasサイズ: width={canvas_width}, height={canvas_height}")
-                print(f"[DEBUG] display画像サイズ: width={display_img_with_points.width}, height={display_img_with_points.height}")
+                print(f"[DEBUG] canvas_background_imageサイズ: width={canvas_background_image.width}, height={canvas_background_image.height}")
                 print(f"[DEBUG] 元の画像サイズ: width={final_display_image.width}, height={final_display_image.height}")
                 print(f"[DEBUG] scale: {scale}")
                 
                 # st_canvasのbackground_imageに画像を設定することで、画像とキャンバスを完全に一致させる
                 # これにより、画像をクリックすると座標が取得できる
+                # 注意: background_imageには、選択された点を描画する前の元の画像を使用する
+                # 選択された点はst_canvasのpointモードで自動的に描画される
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
                     stroke_width=2,
                     stroke_color="#FF0000",  # 線の色（赤）
-                    background_image=display_img_with_points,  # 背景画像（表示用画像）- これがキャンバスの背景として表示される
+                    background_image=canvas_background_image,  # 背景画像（元の画像、RGBモード）- これがキャンバスの背景として表示される
                     update_streamlit=True,  # クリックを検出するためにTrueに設定
                     height=canvas_height,  # キャンバスの高さを画像の高さに正確に合わせる
                     width=canvas_width,  # キャンバスの幅を画像の幅に正確に合わせる
