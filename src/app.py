@@ -410,6 +410,10 @@ def draw_point_on_image(image: Image.Image, x: int, y: int, color: Tuple[int, in
     Returns:
         点が描画された画像（PIL Image）
     """
+    # OpenCVが利用できない場合は、元の画像をそのまま返す
+    if not CV2_AVAILABLE or cv2 is None:
+        return image
+    
     img_array = np.array(image)
     
     # RGBからBGRに変換（OpenCV用）
@@ -785,30 +789,25 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 
                 display_image = Image.fromarray(img_rgb)
         
-        # HTMLコンポーネントで画像を表示（カーソル位置の座標を表示）
-        try:
-            print(f"[DEBUG] HTMLコンポーネントを作成します: image_key={image_key}")
-            html_content = create_image_with_coord_display(display_image, image_key)
-            
-            # html_contentが正しく生成されているか確認
-            if not html_content or not isinstance(html_content, str):
-                st.error("HTMLコンテンツの生成に失敗しました。")
-                st.image(display_image, caption="画像プレビュー", use_container_width=True)
-            else:
-                # 高さ制限を緩和し、スクロール可能にする
-                display_height = min(image.height + 50, 1200)  # 最大1200pxまで表示
-                # 高さが有効な値か確認
-                if display_height <= 0:
-                    display_height = 600  # デフォルト値
-                
-                print(f"[DEBUG] HTMLコンポーネントを表示します: height={display_height}, html_content length={len(html_content)}")
-                st.components.v1.html(html_content, height=display_height, scrolling=True)
-        except Exception as e:
-            st.error(f"画像表示エラー: {e}")
-            import traceback
-            st.code(traceback.format_exc())
-            # フォールバック: 通常の画像表示を使用
-            st.image(display_image, caption="画像プレビュー（座標表示機能は利用できません）", use_container_width=True)
+        # 画像を表示（Streamlit Cloudではst.components.v1.htmlが利用できないため、st.imageを使用）
+        # display_imageがPIL Imageであることを確認
+        if isinstance(display_image, Image.Image):
+            st.image(display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+        else:
+            # numpy配列の場合はPIL Imageに変換
+            try:
+                if isinstance(display_image, np.ndarray):
+                    if len(display_image.shape) == 3:
+                        # BGRからRGBに変換（OpenCV形式の場合）
+                        if CV2_AVAILABLE and cv2 is not None:
+                            display_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
+                        display_image = Image.fromarray(display_image)
+                    else:
+                        display_image = Image.fromarray(display_image)
+                st.image(display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+            except Exception as e:
+                st.error(f"画像表示エラー: {e}")
+                st.info("画像の表示に失敗しました。数値入力フィールドで座標を指定してください。")
         
         # 範囲が登録されている場合は可視化した画像も表示
         if regions:
