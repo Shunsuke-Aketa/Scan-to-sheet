@@ -863,13 +863,48 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 st.session_state[f'image_scale_{image_key}'] = scale
                 st.session_state[f'original_image_size_{image_key}'] = (final_display_image.width, final_display_image.height)
                 
+                # 前回のクリック数を取得（重複処理を防ぐため）
+                last_click_count_key = f'last_click_count_{image_key}'
+                if last_click_count_key not in st.session_state:
+                    st.session_state[last_click_count_key] = 0
+                
+                # 通常の画像表示（画像が確実に表示されるように）
+                # 画像上に選択された点を描画
+                display_img_with_points = canvas_image.copy()
+                if current_points['top_left']:
+                    x, y = current_points['top_left']
+                    # 表示用画像の座標に変換
+                    display_x = int(x * scale) if scale != 1.0 else x
+                    display_y = int(y * scale) if scale != 1.0 else y
+                    # 点を描画（簡易版：PILで描画）
+                    from PIL import ImageDraw
+                    draw = ImageDraw.Draw(display_img_with_points)
+                    draw.ellipse([display_x - 5, display_y - 5, display_x + 5, display_y + 5], fill=(255, 0, 0), outline=(255, 0, 0))
+                
+                if current_points['bottom_right']:
+                    x, y = current_points['bottom_right']
+                    # 表示用画像の座標に変換
+                    display_x = int(x * scale) if scale != 1.0 else x
+                    display_y = int(y * scale) if scale != 1.0 else y
+                    # 点を描画
+                    from PIL import ImageDraw
+                    draw = ImageDraw.Draw(display_img_with_points)
+                    draw.ellipse([display_x - 5, display_y - 5, display_x + 5, display_y + 5], fill=(0, 255, 0), outline=(0, 255, 0))
+                
+                # 通常の画像表示
+                try:
+                    st.image(display_img_with_points, caption="画像プレビュー（クリックで座標を選択）", use_container_width=True)
+                except TypeError:
+                    st.image(display_img_with_points, caption="画像プレビュー（クリックで座標を選択）", use_column_width=True)
+                
                 # キャンバスを作成（ポイントモードでクリックを検出）
+                # update_streamlit=Trueにして、クリックを検出できるようにする
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
                     stroke_width=2,
                     stroke_color="#FF0000",  # 線の色（赤）
                     background_image=canvas_image,
-                    update_streamlit=True,
+                    update_streamlit=True,  # クリックを検出するためにTrueに設定
                     height=display_height,
                     width=display_width,
                     drawing_mode="point",  # ポイントモードでクリックを検出
@@ -880,40 +915,50 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 # クリックされた座標を取得
                 if canvas_result.json_data is not None:
                     objects = canvas_result.json_data.get("objects", [])
-                    if objects:
-                        # 最新の2つのポイントを取得
-                        # 表示用画像の座標を元の画像座標に変換
-                        points = []
-                        for obj in objects[-2:]:
-                            # 表示用画像の座標
-                            display_x = int(obj["left"])
-                            display_y = int(obj["top"])
-                            # 元の画像座標に変換
-                            orig_x = int(display_x / scale) if scale != 1.0 else display_x
-                            orig_y = int(display_y / scale) if scale != 1.0 else display_y
-                            points.append((orig_x, orig_y))
-                        
-                        if len(points) >= 1:
-                            # 1回目のクリック: 左上の点
-                            current_points['top_left'] = points[0]
-                            if len(points) >= 2:
-                                # 2回目のクリック: 右下の点
-                                current_points['bottom_right'] = points[1]
+                    current_click_count = len(objects)
+                    
+                    # クリック数が増えた場合のみ処理（重複処理を防ぐ）
+                    if current_click_count > st.session_state[last_click_count_key]:
+                        if objects:
+                            # 最新の2つのポイントを取得
+                            # 表示用画像の座標を元の画像座標に変換
+                            points = []
+                            for obj in objects[-2:]:
+                                # 表示用画像の座標
+                                display_x = int(obj["left"])
+                                display_y = int(obj["top"])
+                                # 元の画像座標に変換
+                                orig_x = int(display_x / scale) if scale != 1.0 else display_x
+                                orig_y = int(display_y / scale) if scale != 1.0 else display_y
+                                points.append((orig_x, orig_y))
                             
-                            # セッション状態を更新
-                            st.session_state[f'current_points_{image_key}'] = current_points
-                            
-                            # 数値入力フィールドのセッション状態も更新
-                            if current_points['top_left']:
-                                st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
-                                st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
-                            if current_points['bottom_right']:
-                                st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
-                                st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
-                            
-                            # 自動的にリロード（座標が更新された場合）
-                            if len(points) >= 2:
-                                st.rerun()
+                            if len(points) >= 1:
+                                # 1回目のクリック: 左上の点
+                                current_points['top_left'] = points[0]
+                                if len(points) >= 2:
+                                    # 2回目のクリック: 右下の点
+                                    current_points['bottom_right'] = points[1]
+                                
+                                # セッション状態を更新
+                                st.session_state[f'current_points_{image_key}'] = current_points
+                                
+                                # 数値入力フィールドのセッション状態も更新
+                                if current_points['top_left']:
+                                    st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
+                                    st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
+                                if current_points['bottom_right']:
+                                    st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
+                                    st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
+                                
+                                # クリック数を更新
+                                st.session_state[last_click_count_key] = current_click_count
+                                
+                                # 座標が更新されたことを示すフラグを設定（リロードはst_canvasのupdate_streamlitで自動的に行われる）
+                                # ただし、無限ループを防ぐため、座標が変更された場合のみ処理
+                                if (current_points['top_left'] != st.session_state.get(f'last_top_left_{image_key}') or
+                                    current_points['bottom_right'] != st.session_state.get(f'last_bottom_right_{image_key}')):
+                                    st.session_state[f'last_top_left_{image_key}'] = current_points['top_left']
+                                    st.session_state[f'last_bottom_right_{image_key}'] = current_points['bottom_right']
                 
             except (ImportError, AttributeError, Exception) as canvas_error:
                 # streamlit-drawable-canvasが利用できない場合は、通常の画像表示にフォールバック
