@@ -806,7 +806,7 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 
                 display_image = Image.fromarray(img_rgb)
         
-        # 画像を表示（Streamlit Cloudではst.components.v1.htmlが利用できないため、st.imageを使用）
+        # 画像を表示（クリックで座標を取得できるようにstreamlit-drawable-canvasを試行）
         # display_imageがPIL Imageであることを確認し、確実にPIL Imageに変換
         try:
             # 既にPIL Imageの場合はそのまま使用
@@ -833,12 +833,66 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             if final_display_image.mode != 'RGB':
                 final_display_image = final_display_image.convert('RGB')
             
-            # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
+            # streamlit-drawable-canvasを試行（クリックで座標を取得）
             try:
-                st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
-            except TypeError:
-                # 古いStreamlitバージョンではuse_column_widthを使用
-                st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
+                from streamlit_drawable_canvas import st_canvas
+                
+                st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
+                st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
+                
+                # キャンバスを作成（ポイントモードでクリックを検出）
+                canvas_result = st_canvas(
+                    fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
+                    stroke_width=2,
+                    stroke_color="#FF0000",  # 線の色（赤）
+                    background_image=final_display_image,
+                    update_streamlit=True,
+                    height=final_display_image.height,
+                    width=final_display_image.width,
+                    drawing_mode="point",  # ポイントモードでクリックを検出
+                    point_display_radius=5,  # ポイントの表示半径
+                    key=f"canvas_{image_key}",
+                )
+                
+                # クリックされた座標を取得
+                if canvas_result.json_data is not None:
+                    objects = canvas_result.json_data.get("objects", [])
+                    if objects:
+                        # 最新の2つのポイントを取得
+                        points = [(int(obj["left"]), int(obj["top"])) for obj in objects[-2:]]
+                        
+                        if len(points) >= 1:
+                            # 1回目のクリック: 左上の点
+                            current_points['top_left'] = points[0]
+                            if len(points) >= 2:
+                                # 2回目のクリック: 右下の点
+                                current_points['bottom_right'] = points[1]
+                            
+                            # セッション状態を更新
+                            st.session_state[f'current_points_{image_key}'] = current_points
+                            
+                            # 数値入力フィールドのセッション状態も更新
+                            if current_points['top_left']:
+                                st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
+                                st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
+                            if current_points['bottom_right']:
+                                st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
+                                st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
+                            
+                            # 自動的にリロード（座標が更新された場合）
+                            if len(points) >= 2:
+                                st.rerun()
+                
+            except (ImportError, AttributeError, Exception) as canvas_error:
+                # streamlit-drawable-canvasが利用できない場合は、通常の画像表示にフォールバック
+                st.warning("⚠️ クリック座標取得機能が利用できません。数値入力フィールドで座標を指定してください。")
+                
+                # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
+                try:
+                    st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+                except TypeError:
+                    # 古いStreamlitバージョンではuse_column_widthを使用
+                    st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
         except Exception as e:
             st.error(f"画像表示エラー: {e}")
             import traceback
