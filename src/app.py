@@ -1033,14 +1033,24 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                     st.session_state[last_click_count_key] = 0
                 
                 # streamlit-drawable-canvasでクリック座標を取得
+                # 注意: widthとheightは画像の実際のサイズ（ピクセル単位）に正確に合わせる必要がある
+                # display_img_with_pointsのサイズを使用
+                canvas_width = display_img_with_points.width
+                canvas_height = display_img_with_points.height
+                
+                print(f"[DEBUG] canvasサイズ: width={canvas_width}, height={canvas_height}")
+                print(f"[DEBUG] display画像サイズ: width={display_img_with_points.width}, height={display_img_with_points.height}")
+                print(f"[DEBUG] 元の画像サイズ: width={final_display_image.width}, height={final_display_image.height}")
+                print(f"[DEBUG] scale: {scale}")
+                
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
                     stroke_width=2,
                     stroke_color="#FF0000",  # 線の色（赤）
-                    background_image=display_img_with_points,
+                    background_image=display_img_with_points,  # 背景画像（表示用画像）
                     update_streamlit=True,  # クリックを検出するためにTrueに設定
-                    height=display_height,
-                    width=display_width,
+                    height=canvas_height,  # キャンバスの高さを画像の高さに正確に合わせる
+                    width=canvas_width,  # キャンバスの幅を画像の幅に正確に合わせる
                     drawing_mode="point",  # ポイントモードでクリックを検出
                     point_display_radius=5,  # ポイントの表示半径
                     key=f"canvas_{image_key}",
