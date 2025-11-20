@@ -1048,10 +1048,24 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 
                 # クリックされた座標を取得
                 if canvas_result.json_data is not None:
-                    objects = canvas_result.json_data.get("objects", [])
+                    # json_dataの構造を確認
+                    print(f"[DEBUG] canvas_result.json_data の型: {type(canvas_result.json_data)}")
+                    print(f"[DEBUG] canvas_result.json_data の内容: {canvas_result.json_data}")
+                    
+                    # json_dataが文字列の場合はパース
+                    if isinstance(canvas_result.json_data, str):
+                        import json
+                        try:
+                            json_data = json.loads(canvas_result.json_data)
+                        except:
+                            json_data = {}
+                    else:
+                        json_data = canvas_result.json_data
+                    
+                    # objectsを取得
+                    objects = json_data.get("objects", [])
                     current_click_count = len(objects)
                     
-                    print(f"[DEBUG] canvas_result.json_data: {canvas_result.json_data}")
                     print(f"[DEBUG] objects: {objects}")
                     print(f"[DEBUG] current_click_count: {current_click_count}, last_click_count: {st.session_state[last_click_count_key]}")
                     
@@ -1063,11 +1077,16 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                             points = []
                             for obj in objects[-2:]:
                                 # 表示用画像の座標
-                                display_x = int(obj.get("left", 0))
-                                display_y = int(obj.get("top", 0))
+                                # streamlit-drawable-canvasのpointモードでは、leftとtopが座標
+                                display_x = float(obj.get("left", 0))
+                                display_y = float(obj.get("top", 0))
+                                
+                                print(f"[DEBUG] オブジェクト: {obj}")
+                                print(f"[DEBUG] 表示座標 (raw): left={display_x}, top={display_y}")
+                                
                                 # 元の画像座標に変換
-                                orig_x = int(display_x / scale) if scale != 1.0 else display_x
-                                orig_y = int(display_y / scale) if scale != 1.0 else display_y
+                                orig_x = int(display_x / scale) if scale != 1.0 else int(display_x)
+                                orig_y = int(display_y / scale) if scale != 1.0 else int(display_y)
                                 points.append((orig_x, orig_y))
                                 print(f"[DEBUG] 座標変換: 表示({display_x}, {display_y}) -> 元({orig_x}, {orig_y}), scale={scale}")
                             
@@ -1087,7 +1106,10 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                                 st.session_state[f'current_points_{image_key}'] = current_points
                                 
                                 # 数値入力フィールドのセッション状態も更新
+                                # 注意: st.number_inputのkeyが既に存在する場合は、直接更新できない
+                                # 代わりに、次回のリロード時に値が反映されるようにする
                                 if current_points['top_left']:
+                                    # セッション状態を更新（次回のリロード時に反映）
                                     st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
                                     st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
                                 if current_points['bottom_right']:
@@ -1103,7 +1125,14 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                                 elif len(points) >= 2:
                                     st.success(f"✅ 右下の点を選択しました: ({points[1][0]}, {points[1][1]})")
                                 
-                                # リロードはst_canvasのupdate_streamlitで自動的に行われる
+                                # 明示的にリロードして座標を反映
+                                st.rerun()
+                    else:
+                        # クリック数が変わっていない場合でも、デバッグ情報を表示
+                        if current_click_count > 0:
+                            print(f"[DEBUG] クリック数が変わっていません。現在: {current_click_count}, 前回: {st.session_state[last_click_count_key]}")
+                else:
+                    print(f"[DEBUG] canvas_result.json_data が None です")
                                 
             except ImportError:
                 # streamlit-drawable-canvasがインストールされていない場合
@@ -1245,20 +1274,24 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
         st.markdown("**1. 左上の点** 🔴")
         col_x1, col_y1 = st.columns(2)
         with col_x1:
-            # セッション状態から値を取得（セッション状態に値がない場合はcurrent_pointsから取得）
+            # セッション状態から値を取得（優先順位: セッション状態 > current_points > デフォルト）
             if f'top_left_x_{image_key}' in st.session_state:
                 top_left_x_value = st.session_state[f'top_left_x_{image_key}']
+            elif current_points['top_left']:
+                top_left_x_value = current_points['top_left'][0]
             else:
-                top_left_x_value = current_points['top_left'][0] if current_points['top_left'] else 0
+                top_left_x_value = 0
             top_left_x = st.number_input("X1", min_value=0, max_value=image.width,
                                          value=top_left_x_value,
                                          key=f"top_left_x_{image_key}")
         with col_y1:
-            # セッション状態から値を取得（セッション状態に値がない場合はcurrent_pointsから取得）
+            # セッション状態から値を取得（優先順位: セッション状態 > current_points > デフォルト）
             if f'top_left_y_{image_key}' in st.session_state:
                 top_left_y_value = st.session_state[f'top_left_y_{image_key}']
+            elif current_points['top_left']:
+                top_left_y_value = current_points['top_left'][1]
             else:
-                top_left_y_value = current_points['top_left'][1] if current_points['top_left'] else 0
+                top_left_y_value = 0
             top_left_y = st.number_input("Y1", min_value=0, max_value=image.height,
                                          value=top_left_y_value,
                                          key=f"top_left_y_{image_key}")
@@ -1267,20 +1300,24 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
         st.markdown("**2. 右下の点** 🟢")
         col_x2, col_y2 = st.columns(2)
         with col_x2:
-            # セッション状態から値を取得（セッション状態に値がない場合はcurrent_pointsから取得）
+            # セッション状態から値を取得（優先順位: セッション状態 > current_points > デフォルト）
             if f'bottom_right_x_{image_key}' in st.session_state:
                 bottom_right_x_value = st.session_state[f'bottom_right_x_{image_key}']
+            elif current_points['bottom_right']:
+                bottom_right_x_value = current_points['bottom_right'][0]
             else:
-                bottom_right_x_value = current_points['bottom_right'][0] if current_points['bottom_right'] else image.width
+                bottom_right_x_value = image.width
             bottom_right_x = st.number_input("X2", min_value=0, max_value=image.width,
                                             value=bottom_right_x_value,
                                             key=f"bottom_right_x_{image_key}")
         with col_y2:
-            # セッション状態から値を取得（セッション状態に値がない場合はcurrent_pointsから取得）
+            # セッション状態から値を取得（優先順位: セッション状態 > current_points > デフォルト）
             if f'bottom_right_y_{image_key}' in st.session_state:
                 bottom_right_y_value = st.session_state[f'bottom_right_y_{image_key}']
+            elif current_points['bottom_right']:
+                bottom_right_y_value = current_points['bottom_right'][1]
             else:
-                bottom_right_y_value = current_points['bottom_right'][1] if current_points['bottom_right'] else image.height
+                bottom_right_y_value = image.height
             bottom_right_y = st.number_input("Y2", min_value=0, max_value=image.height,
                                             value=bottom_right_y_value,
                                             key=f"bottom_right_y_{image_key}")
