@@ -83,6 +83,10 @@ if 'selected_files_for_processing' not in st.session_state:
 
 def convert_image_for_display(image: np.ndarray) -> Image.Image:
     """OpenCV画像をPIL Imageに変換（表示用）"""
+    if not CV2_AVAILABLE or cv2 is None:
+        # OpenCVが利用できない場合は、そのままPIL Imageに変換
+        return Image.fromarray(image)
+    
     if len(image.shape) == 3:
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     else:
@@ -117,6 +121,10 @@ def visualize_regions_on_image(image: Image.Image, regions: List[Dict]) -> Image
     Returns:
         範囲が描画された画像（PIL Image）
     """
+    # OpenCVが利用できない場合は、元の画像をそのまま返す
+    if not CV2_AVAILABLE or cv2 is None:
+        return image
+    
     # PIL Imageをnumpy配列に変換
     img_array = np.array(image)
     
@@ -759,21 +767,23 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             x1, y1 = current_points['top_left']
             x2, y2 = current_points['bottom_right']
             
-            # 矩形を描画
-            img_array = np.array(display_image)
-            if len(img_array.shape) == 3:
-                img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-            else:
-                img_bgr = img_array
-            
-            cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (255, 0, 255), 2)  # マゼンタ色
-            
-            if len(img_bgr.shape) == 3:
-                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-            else:
-                img_rgb = img_bgr
-            
-            display_image = Image.fromarray(img_rgb)
+            # OpenCVが利用可能な場合のみ矩形を描画
+            if CV2_AVAILABLE and cv2 is not None:
+                # 矩形を描画
+                img_array = np.array(display_image)
+                if len(img_array.shape) == 3:
+                    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                else:
+                    img_bgr = img_array
+                
+                cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (255, 0, 255), 2)  # マゼンタ色
+                
+                if len(img_bgr.shape) == 3:
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                else:
+                    img_rgb = img_bgr
+                
+                display_image = Image.fromarray(img_rgb)
         
         # HTMLコンポーネントで画像を表示（カーソル位置の座標を表示）
         print(f"[DEBUG] HTMLコンポーネントを作成します: image_key={image_key}")
