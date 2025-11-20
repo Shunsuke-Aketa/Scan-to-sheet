@@ -840,15 +840,38 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
                 st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
                 
+                # 画像サイズを適切にリサイズ（表示用）
+                # 大きすぎる画像は縮小して表示（最大幅800px、アスペクト比を保持）
+                max_display_width = 800
+                max_display_height = 600
+                
+                display_width = final_display_image.width
+                display_height = final_display_image.height
+                
+                # リサイズが必要かチェック
+                if display_width > max_display_width or display_height > max_display_height:
+                    # アスペクト比を保持してリサイズ
+                    scale = min(max_display_width / display_width, max_display_height / display_height)
+                    display_width = int(display_width * scale)
+                    display_height = int(display_height * scale)
+                    canvas_image = final_display_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+                else:
+                    canvas_image = final_display_image
+                    scale = 1.0
+                
+                # スケールファクターをセッション状態に保存（座標変換用）
+                st.session_state[f'image_scale_{image_key}'] = scale
+                st.session_state[f'original_image_size_{image_key}'] = (final_display_image.width, final_display_image.height)
+                
                 # キャンバスを作成（ポイントモードでクリックを検出）
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
                     stroke_width=2,
                     stroke_color="#FF0000",  # 線の色（赤）
-                    background_image=final_display_image,
+                    background_image=canvas_image,
                     update_streamlit=True,
-                    height=final_display_image.height,
-                    width=final_display_image.width,
+                    height=display_height,
+                    width=display_width,
                     drawing_mode="point",  # ポイントモードでクリックを検出
                     point_display_radius=5,  # ポイントの表示半径
                     key=f"canvas_{image_key}",
@@ -859,7 +882,16 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                     objects = canvas_result.json_data.get("objects", [])
                     if objects:
                         # 最新の2つのポイントを取得
-                        points = [(int(obj["left"]), int(obj["top"])) for obj in objects[-2:]]
+                        # 表示用画像の座標を元の画像座標に変換
+                        points = []
+                        for obj in objects[-2:]:
+                            # 表示用画像の座標
+                            display_x = int(obj["left"])
+                            display_y = int(obj["top"])
+                            # 元の画像座標に変換
+                            orig_x = int(display_x / scale) if scale != 1.0 else display_x
+                            orig_y = int(display_y / scale) if scale != 1.0 else display_y
+                            points.append((orig_x, orig_y))
                         
                         if len(points) >= 1:
                             # 1回目のクリック: 左上の点
