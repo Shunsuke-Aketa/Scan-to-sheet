@@ -654,6 +654,8 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                     const clampedY = Math.max(0, Math.min(y, originalHeight_{unique_id} - 1));
                     
                     console.log('[CLICK] クリック座標（元の画像）:', clampedX, clampedY);
+                    console.log('[CLICK] 元の画像サイズ:', originalWidth_{unique_id}, originalHeight_{unique_id});
+                    console.log('[CLICK] 表示画像サイズ:', displayWidth_{unique_id}, displayHeight_{unique_id});
                     
                     // URLパラメータを使用してStreamlitに座標を送信
                     const timestamp = Date.now();
@@ -664,64 +666,84 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                         'timestamp': timestamp.toString()
                     }});
                     
+                    console.log('[CLICK] URLパラメータ:', params.toString());
+                    
                     // Streamlitの親ウィンドウにURLパラメータを送信
+                    // iframe内から親ウィンドウのURLを変更するのはセキュリティ制限により困難
+                    // そのため、現在のウィンドウのURLを変更し、Streamlitがそれを検出できるようにする
                     let urlUpdated = false;
                     
-                    // 方法1: window.parent.postMessageを使用
+                    // 方法1: window.location.searchを直接操作（最も確実）
                     try {{
-                        if (window.parent && window.parent !== window) {{
-                            window.parent.postMessage({{
-                                type: 'streamlit:setComponentValue',
-                                value: {{
-                                    click_x: clampedX,
-                                    click_y: clampedY,
-                                    image_key: '{image_key}',
-                                    timestamp: timestamp
-                                }}
-                            }}, '*');
-                            console.log('[CLICK] postMessageで送信しました');
-                        }}
+                        // 現在のURLからベースURLを取得
+                        const currentUrl = window.location.href;
+                        const baseUrl = currentUrl.split('?')[0];
+                        const newUrl = baseUrl + '?' + params.toString();
+                        
+                        console.log('[CLICK] 現在のURL:', currentUrl);
+                        console.log('[CLICK] 新しいURL:', newUrl);
+                        
+                        // URLを変更（これによりページがリロードされる）
+                        window.location.href = newUrl;
+                        urlUpdated = true;
+                        console.log('[CLICK] window.location.hrefでURLを更新しました');
                     }} catch (e) {{
-                        console.log('[CLICK] postMessageエラー:', e);
+                        console.error('[CLICK] window.location.hrefエラー:', e);
                     }}
                     
-                    // 方法2: window.top.location.hrefを使用
+                    // 方法2: window.parent.postMessageを使用（フォールバック）
+                    if (!urlUpdated) {{
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                window.parent.postMessage({{
+                                    type: 'streamlit:setComponentValue',
+                                    value: {{
+                                        click_x: clampedX,
+                                        click_y: clampedY,
+                                        image_key: '{image_key}',
+                                        timestamp: timestamp
+                                    }}
+                                }}, '*');
+                                console.log('[CLICK] postMessageで送信しました');
+                            }}
+                        }} catch (e) {{
+                            console.log('[CLICK] postMessageエラー:', e);
+                        }}
+                    }}
+                    
+                    // 方法3: window.top.location.hrefを使用（フォールバック）
                     if (!urlUpdated) {{
                         try {{
                             if (window.top && window.top !== window) {{
                                 const currentUrl = window.top.location.href.split('?')[0];
                                 const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[CLICK] window.top.location.hrefを更新:', newUrl);
                                 window.top.location.href = newUrl;
                                 urlUpdated = true;
                             }}
                         }} catch (e) {{
-                            console.log('[CLICK] window.top.location.hrefエラー:', e);
+                            console.log('[CLICK] window.top.location.hrefエラー（セキュリティ制限の可能性）:', e);
                         }}
                     }}
                     
-                    // 方法3: window.parent.location.hrefを使用
+                    // 方法4: window.parent.location.hrefを使用（フォールバック）
                     if (!urlUpdated) {{
                         try {{
                             if (window.parent && window.parent !== window) {{
                                 const currentUrl = window.parent.location.href.split('?')[0];
                                 const newUrl = currentUrl + '?' + params.toString();
+                                console.log('[CLICK] window.parent.location.hrefを更新:', newUrl);
                                 window.parent.location.href = newUrl;
                                 urlUpdated = true;
                             }}
                         }} catch (e) {{
-                            console.log('[CLICK] window.parent.location.hrefエラー:', e);
+                            console.log('[CLICK] window.parent.location.hrefエラー（セキュリティ制限の可能性）:', e);
                         }}
                     }}
                     
-                    // 方法4: 現在のウィンドウのURLを変更（フォールバック）
                     if (!urlUpdated) {{
-                        try {{
-                            const currentUrl = window.location.href.split('?')[0];
-                            const newUrl = currentUrl + '?' + params.toString();
-                            window.location.href = newUrl;
-                        }} catch (e) {{
-                            console.error('[CLICK] すべてのURL更新方法が失敗しました:', e);
-                        }}
+                        console.error('[CLICK] すべてのURL更新方法が失敗しました。セキュリティ制限により、iframe内から親ウィンドウのURLを変更できません。');
+                        alert('座標の送信に失敗しました。ブラウザのセキュリティ制限により、iframe内からURLを変更できません。\\n座標: (' + clampedX + ', ' + clampedY + ')\\n手動で数値入力フィールドに入力してください。');
                     }}
                 }}
                 
@@ -1131,16 +1153,22 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                         new_params.pop('image_key', None)
                         new_params.pop('timestamp', None)
                         
-                        # クエリパラメータを更新
-                        st.query_params.clear()
-                        for key, value in new_params.items():
-                            if isinstance(value, list):
-                                for v in value:
-                                    st.query_params[key] = v
-                            else:
-                                st.query_params[key] = value
+                        # クエリパラメータを更新（クリックパラメータを削除）
+                        # 注意: st.query_params.clear()とst.query_paramsの設定は、st.rerun()の前に実行する必要がある
+                        try:
+                            st.query_params.clear()
+                            for key, value in new_params.items():
+                                if isinstance(value, list):
+                                    for v in value:
+                                        st.query_params[key] = v
+                                else:
+                                    st.query_params[key] = value
+                        except Exception as param_error:
+                            print(f"[DEBUG] クエリパラメータの更新エラー: {param_error}")
+                            # エラーが発生しても続行
                         
-                        print(f"[DEBUG] リロードを実行します")
+                        print(f"[DEBUG] リロードを実行します（座標: ({click_x}, {click_y})）")
+                        # リロード前に少し待機して、確実にセッション状態が更新されるようにする
                         st.rerun()
                     else:
                         print(f"[DEBUG] このクリックは既に処理済みです")
