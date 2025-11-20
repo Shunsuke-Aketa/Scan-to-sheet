@@ -451,6 +451,299 @@ def draw_point_on_image(image: Image.Image, x: int, y: int, color: Tuple[int, in
     return Image.fromarray(img_rgb)
 
 
+def create_canvas_with_background_image(image: Image.Image, image_key: str, original_width: int = None, original_height: int = None) -> str:
+    """
+    画像を背景として表示し、その上に透明なキャンバスを配置してクリック座標を取得するHTMLコンポーネントを作成
+    
+    Args:
+        image: 表示する画像（PIL Image、リサイズ済みの可能性あり）
+        image_key: セッション状態で管理するキー
+        original_width: 元の画像の幅（リサイズ前、Noneの場合はimage.widthを使用）
+        original_height: 元の画像の高さ（リサイズ前、Noneの場合はimage.heightを使用）
+    
+    Returns:
+        HTML文字列
+    """
+    # 画像をbase64エンコード
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    # ユニークなIDを生成（特殊文字を置換）
+    unique_id = image_key.replace(" ", "_").replace(".", "_").replace("/", "_").replace("\\", "_")
+    
+    # 元の画像サイズを取得（座標変換用）
+    if original_width is None or original_height is None:
+        original_size_key = f'original_image_size_{image_key}'
+        if original_size_key in st.session_state:
+            original_width, original_height = st.session_state[original_size_key]
+        else:
+            original_width = image.width
+            original_height = image.height
+    
+    # 表示画像のサイズ
+    display_width = image.width
+    display_height = image.height
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                margin: 0;
+                padding: 10px;
+                font-family: Arial, sans-serif;
+            }}
+            #container_{unique_id} {{
+                position: relative;
+                display: inline-block;
+                width: 100%;
+                max-width: 100%;
+            }}
+            #background_image_{unique_id} {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: auto;
+                display: block;
+                z-index: 1;
+                user-select: none;
+            }}
+            #transparent_canvas_{unique_id} {{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                cursor: crosshair;
+                z-index: 2;
+                background: transparent;
+            }}
+            #coord_display_{unique_id} {{
+                position: absolute;
+                background: rgba(0, 0, 0, 0.85);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+                pointer-events: none;
+                display: none;
+                z-index: 1000;
+                white-space: nowrap;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="container_{unique_id}">
+            <img id="background_image_{unique_id}" 
+                 src="data:image/png;base64,{img_str}" 
+                 alt="座標選択用画像" />
+            <canvas id="transparent_canvas_{unique_id}"></canvas>
+            <div id="coord_display_{unique_id}"></div>
+        </div>
+        <script>
+            (function() {{
+                'use strict';
+                
+                let img_{unique_id} = null;
+                let canvas_{unique_id} = null;
+                let display_{unique_id} = null;
+                let container_{unique_id} = null;
+                let originalWidth_{unique_id} = {original_width};
+                let originalHeight_{unique_id} = {original_height};
+                let displayWidth_{unique_id} = {display_width};
+                let displayHeight_{unique_id} = {display_height};
+                
+                function initCanvas_{unique_id}() {{
+                    img_{unique_id} = document.getElementById('background_image_{unique_id}');
+                    canvas_{unique_id} = document.getElementById('transparent_canvas_{unique_id}');
+                    display_{unique_id} = document.getElementById('coord_display_{unique_id}');
+                    container_{unique_id} = document.getElementById('container_{unique_id}');
+                    
+                    if (img_{unique_id} && canvas_{unique_id}) {{
+                        // 画像の読み込み完了を待つ
+                        if (img_{unique_id}.complete) {{
+                            setupCanvas_{unique_id}();
+                            attachEventListeners_{unique_id}();
+                        }} else {{
+                            img_{unique_id}.addEventListener('load', function() {{
+                                setupCanvas_{unique_id}();
+                                attachEventListeners_{unique_id}();
+                            }});
+                        }}
+                    }}
+                }}
+                
+                function setupCanvas_{unique_id}() {{
+                    if (!img_{unique_id} || !canvas_{unique_id}) return;
+                    
+                    // 画像の実際の表示サイズを取得
+                    const rect = img_{unique_id}.getBoundingClientRect();
+                    
+                    // キャンバスのサイズを画像の表示サイズに合わせる
+                    canvas_{unique_id}.width = rect.width;
+                    canvas_{unique_id}.height = rect.height;
+                    
+                    // コンテナのサイズも画像に合わせる
+                    container_{unique_id}.style.width = rect.width + 'px';
+                    container_{unique_id}.style.height = rect.height + 'px';
+                }}
+                
+                function attachEventListeners_{unique_id}() {{
+                    if (!canvas_{unique_id} || !display_{unique_id}) return;
+                    
+                    canvas_{unique_id}.addEventListener('mousemove', showCoordinates_{unique_id});
+                    canvas_{unique_id}.addEventListener('mouseleave', hideCoordinates_{unique_id});
+                    canvas_{unique_id}.addEventListener('click', handleCanvasClick_{unique_id});
+                }}
+                
+                function showCoordinates_{unique_id}(event) {{
+                    if (!img_{unique_id} || !display_{unique_id}) return;
+                    
+                    const rect = img_{unique_id}.getBoundingClientRect();
+                    const scaleX = originalWidth_{unique_id} / displayWidth_{unique_id};
+                    const scaleY = originalHeight_{unique_id} / displayHeight_{unique_id};
+                    
+                    const displayX = (event.clientX - rect.left) * (displayWidth_{unique_id} / rect.width);
+                    const displayY = (event.clientY - rect.top) * (displayHeight_{unique_id} / rect.height);
+                    
+                    const x = Math.round(displayX * scaleX);
+                    const y = Math.round(displayY * scaleY);
+                    
+                    const clampedX = Math.max(0, Math.min(x, originalWidth_{unique_id} - 1));
+                    const clampedY = Math.max(0, Math.min(y, originalHeight_{unique_id} - 1));
+                    
+                    display_{unique_id}.textContent = `座標: (${{clampedX}}, ${{clampedY}})`;
+                    display_{unique_id}.style.display = 'block';
+                    
+                    const offsetX = event.clientX - rect.left + 15;
+                    const offsetY = event.clientY - rect.top - 35;
+                    
+                    display_{unique_id}.style.left = offsetX + 'px';
+                    display_{unique_id}.style.top = offsetY + 'px';
+                }}
+                
+                function hideCoordinates_{unique_id}() {{
+                    if (display_{unique_id}) {{
+                        display_{unique_id}.style.display = 'none';
+                    }}
+                }}
+                
+                function handleCanvasClick_{unique_id}(event) {{
+                    if (!img_{unique_id}) return;
+                    
+                    event.preventDefault();
+                    event.stopPropagation();
+                    
+                    const rect = img_{unique_id}.getBoundingClientRect();
+                    const scaleX = originalWidth_{unique_id} / displayWidth_{unique_id};
+                    const scaleY = originalHeight_{unique_id} / displayHeight_{unique_id};
+                    
+                    const displayX = (event.clientX - rect.left) * (displayWidth_{unique_id} / rect.width);
+                    const displayY = (event.clientY - rect.top) * (displayHeight_{unique_id} / rect.height);
+                    
+                    const x = Math.round(displayX * scaleX);
+                    const y = Math.round(displayY * scaleY);
+                    
+                    const clampedX = Math.max(0, Math.min(x, originalWidth_{unique_id} - 1));
+                    const clampedY = Math.max(0, Math.min(y, originalHeight_{unique_id} - 1));
+                    
+                    console.log('[CLICK] クリック座標（元の画像）:', clampedX, clampedY);
+                    
+                    // URLパラメータを使用してStreamlitに座標を送信
+                    const timestamp = Date.now();
+                    const params = new URLSearchParams({{
+                        'click_x': clampedX.toString(),
+                        'click_y': clampedY.toString(),
+                        'image_key': '{image_key}',
+                        'timestamp': timestamp.toString()
+                    }});
+                    
+                    // Streamlitの親ウィンドウにURLパラメータを送信
+                    let urlUpdated = false;
+                    
+                    // 方法1: window.parent.postMessageを使用
+                    try {{
+                        if (window.parent && window.parent !== window) {{
+                            window.parent.postMessage({{
+                                type: 'streamlit:setComponentValue',
+                                value: {{
+                                    click_x: clampedX,
+                                    click_y: clampedY,
+                                    image_key: '{image_key}',
+                                    timestamp: timestamp
+                                }}
+                            }}, '*');
+                            console.log('[CLICK] postMessageで送信しました');
+                        }}
+                    }} catch (e) {{
+                        console.log('[CLICK] postMessageエラー:', e);
+                    }}
+                    
+                    // 方法2: window.top.location.hrefを使用
+                    if (!urlUpdated) {{
+                        try {{
+                            if (window.top && window.top !== window) {{
+                                const currentUrl = window.top.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                window.top.location.href = newUrl;
+                                urlUpdated = true;
+                            }}
+                        }} catch (e) {{
+                            console.log('[CLICK] window.top.location.hrefエラー:', e);
+                        }}
+                    }}
+                    
+                    // 方法3: window.parent.location.hrefを使用
+                    if (!urlUpdated) {{
+                        try {{
+                            if (window.parent && window.parent !== window) {{
+                                const currentUrl = window.parent.location.href.split('?')[0];
+                                const newUrl = currentUrl + '?' + params.toString();
+                                window.parent.location.href = newUrl;
+                                urlUpdated = true;
+                            }}
+                        }} catch (e) {{
+                            console.log('[CLICK] window.parent.location.hrefエラー:', e);
+                        }}
+                    }}
+                    
+                    // 方法4: 現在のウィンドウのURLを変更（フォールバック）
+                    if (!urlUpdated) {{
+                        try {{
+                            const currentUrl = window.location.href.split('?')[0];
+                            const newUrl = currentUrl + '?' + params.toString();
+                            window.location.href = newUrl;
+                        }} catch (e) {{
+                            console.error('[CLICK] すべてのURL更新方法が失敗しました:', e);
+                        }}
+                    }}
+                }}
+                
+                // ウィンドウリサイズ時にキャンバスサイズを再調整
+                window.addEventListener('resize', function() {{
+                    setupCanvas_{unique_id}();
+                }});
+                
+                // ページ読み込み時に初期化
+                if (document.readyState === 'loading') {{
+                    document.addEventListener('DOMContentLoaded', initCanvas_{unique_id});
+                }} else {{
+                    initCanvas_{unique_id}();
+                }}
+            }})();
+        </script>
+    </body>
+    </html>
+    """
+    return html
+
+
 def create_image_with_coord_display(image: Image.Image, image_key: str, original_width: int = None, original_height: int = None) -> str:
     """
     画像を表示し、カーソル位置の座標を表示し、クリック座標を取得するHTMLコンポーネントを作成
@@ -1016,146 +1309,39 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 draw = ImageDraw.Draw(display_img_with_points)
                 draw.rectangle([display_x1, display_y1, display_x2, display_y2], outline=(255, 0, 255), width=2)
             
-            # streamlit-drawable-canvasを使用してクリック座標を取得
+            # カスタムHTMLコンポーネントを使用してクリック座標を取得
+            # 画像を背景として表示し、その上に透明なキャンバスを配置
+            st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
+            st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
+            
             try:
-                from streamlit_drawable_canvas import st_canvas
-                
-                st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
-                st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
-                
-                # 前回のクリック数を取得（重複処理を防ぐため）
-                last_click_count_key = f'last_click_count_{image_key}'
-                if last_click_count_key not in st.session_state:
-                    st.session_state[last_click_count_key] = 0
-                
-                # streamlit-drawable-canvasでクリック座標を取得
-                # 注意: widthとheightは画像の実際のサイズ（ピクセル単位）に正確に合わせる必要がある
-                # canvas_background_imageのサイズを使用
-                canvas_width = canvas_background_image.width
-                canvas_height = canvas_background_image.height
-                
-                print(f"[DEBUG] canvasサイズ: width={canvas_width}, height={canvas_height}")
-                print(f"[DEBUG] canvas_background_imageサイズ: width={canvas_background_image.width}, height={canvas_background_image.height}")
-                print(f"[DEBUG] 元の画像サイズ: width={final_display_image.width}, height={final_display_image.height}")
-                print(f"[DEBUG] scale: {scale}")
-                
-                # st_canvasのbackground_imageに画像を設定することで、画像とキャンバスを完全に一致させる
-                # これにより、画像をクリックすると座標が取得できる
-                # 注意: background_imageには、選択された点を描画する前の元の画像を使用する
-                # 選択された点はst_canvasのpointモードで自動的に描画される
-                canvas_result = st_canvas(
-                    fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
-                    stroke_width=2,
-                    stroke_color="#FF0000",  # 線の色（赤）
-                    background_image=canvas_background_image,  # 背景画像（元の画像、RGBモード）- これがキャンバスの背景として表示される
-                    update_streamlit=True,  # クリックを検出するためにTrueに設定
-                    height=canvas_height,  # キャンバスの高さを画像の高さに正確に合わせる
-                    width=canvas_width,  # キャンバスの幅を画像の幅に正確に合わせる
-                    drawing_mode="point",  # ポイントモードでクリックを検出
-                    point_display_radius=5,  # ポイントの表示半径
-                    key=f"canvas_{image_key}",
+                # カスタムHTMLコンポーネントを作成
+                html_content = create_canvas_with_background_image(
+                    display_image_resized,
+                    image_key,
+                    original_width=final_display_image.width,
+                    original_height=final_display_image.height
                 )
                 
-                # クリックされた座標を取得
-                if canvas_result.json_data is not None:
-                    # json_dataの構造を確認
-                    print(f"[DEBUG] canvas_result.json_data の型: {type(canvas_result.json_data)}")
-                    print(f"[DEBUG] canvas_result.json_data の内容: {canvas_result.json_data}")
-                    
-                    # json_dataが文字列の場合はパース
-                    if isinstance(canvas_result.json_data, str):
-                        import json
-                        try:
-                            json_data = json.loads(canvas_result.json_data)
-                        except:
-                            json_data = {}
-                    else:
-                        json_data = canvas_result.json_data
-                    
-                    # objectsを取得
-                    objects = json_data.get("objects", [])
-                    current_click_count = len(objects)
-                    
-                    print(f"[DEBUG] objects: {objects}")
-                    print(f"[DEBUG] current_click_count: {current_click_count}, last_click_count: {st.session_state[last_click_count_key]}")
-                    
-                    # クリック数が増えた場合のみ処理（重複処理を防ぐ）
-                    if current_click_count > st.session_state[last_click_count_key]:
-                        if objects:
-                            # 最新の2つのポイントを取得
-                            # 表示用画像の座標を元の画像座標に変換
-                            points = []
-                            for obj in objects[-2:]:
-                                # 表示用画像の座標
-                                # streamlit-drawable-canvasのpointモードでは、leftとtopが座標
-                                display_x = float(obj.get("left", 0))
-                                display_y = float(obj.get("top", 0))
-                                
-                                print(f"[DEBUG] オブジェクト: {obj}")
-                                print(f"[DEBUG] 表示座標 (raw): left={display_x}, top={display_y}")
-                                
-                                # 元の画像座標に変換
-                                orig_x = int(display_x / scale) if scale != 1.0 else int(display_x)
-                                orig_y = int(display_y / scale) if scale != 1.0 else int(display_y)
-                                points.append((orig_x, orig_y))
-                                print(f"[DEBUG] 座標変換: 表示({display_x}, {display_y}) -> 元({orig_x}, {orig_y}), scale={scale}")
-                            
-                            if len(points) >= 1:
-                                # 1回目のクリック: 左上の点
-                                current_points['top_left'] = points[0]
-                                st.session_state[f'click_count_{image_key}'] = 1
-                                print(f"[DEBUG] 左上の点を設定: {points[0]}")
-                                
-                                if len(points) >= 2:
-                                    # 2回目のクリック: 右下の点
-                                    current_points['bottom_right'] = points[1]
-                                    st.session_state[f'click_count_{image_key}'] = 2
-                                    print(f"[DEBUG] 右下の点を設定: {points[1]}")
-                                
-                                # セッション状態を更新
-                                st.session_state[f'current_points_{image_key}'] = current_points
-                                
-                                # 数値入力フィールドのセッション状態も更新
-                                # 注意: st.number_inputのkeyが既に存在する場合は、直接更新できない
-                                # 代わりに、次回のリロード時に値が反映されるようにする
-                                if current_points['top_left']:
-                                    # セッション状態を更新（次回のリロード時に反映）
-                                    st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
-                                    st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
-                                if current_points['bottom_right']:
-                                    st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
-                                    st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
-                                
-                                # クリック数を更新
-                                st.session_state[last_click_count_key] = current_click_count
-                                
-                                # 成功メッセージを表示
-                                if len(points) == 1:
-                                    st.success(f"✅ 左上の点を選択しました: ({points[0][0]}, {points[0][1]})")
-                                elif len(points) >= 2:
-                                    st.success(f"✅ 右下の点を選択しました: ({points[1][0]}, {points[1][1]})")
-                                
-                                # 明示的にリロードして座標を反映
-                                st.rerun()
-                    else:
-                        # クリック数が変わっていない場合でも、デバッグ情報を表示
-                        if current_click_count > 0:
-                            print(f"[DEBUG] クリック数が変わっていません。現在: {current_click_count}, 前回: {st.session_state[last_click_count_key]}")
-                else:
-                    print(f"[DEBUG] canvas_result.json_data が None です")
-                                
-            except ImportError:
-                # streamlit-drawable-canvasがインストールされていない場合
-                st.warning("⚠️ streamlit-drawable-canvasがインストールされていません。数値入力フィールドで座標を指定してください。")
-                st.info("💡 インストール方法: `pip install streamlit-drawable-canvas` または `uv pip install streamlit-drawable-canvas`")
+                # HTMLコンポーネントを表示
+                display_height = min(display_image_resized.height + 50, 1200)
+                if display_height <= 0:
+                    display_height = 800
                 
-                # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
+                # st.components.v1.htmlが利用可能かチェック
                 try:
-                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
-                except TypeError:
-                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
-            except Exception as canvas_error:
-                # streamlit-drawable-canvasでエラーが発生した場合
+                    st.components.v1.html(html_content, height=display_height, scrolling=False)
+                except AttributeError:
+                    # st.components.v1.htmlが利用できない場合（古いStreamlitバージョンなど）
+                    st.warning("⚠️ HTMLコンポーネントが利用できません。数値入力フィールドで座標を指定してください。")
+                    # フォールバック: st.imageを使用
+                    try:
+                        st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+                    except TypeError:
+                        st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
+                
+            except Exception as html_error:
+                # HTMLコンポーネントでエラーが発生した場合
                 st.warning("⚠️ クリック座標取得機能でエラーが発生しました。数値入力フィールドで座標を指定してください。")
                 
                 # エラーの詳細を表示（デバッグ用）
