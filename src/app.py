@@ -833,8 +833,12 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
             if final_display_image.mode != 'RGB':
                 final_display_image = final_display_image.convert('RGB')
             
-            # st.imageに渡す
-            st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+            # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
+            try:
+                st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+            except TypeError:
+                # 古いStreamlitバージョンではuse_column_widthを使用
+                st.image(final_display_image, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
         except Exception as e:
             st.error(f"画像表示エラー: {e}")
             import traceback
@@ -844,7 +848,11 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
         # 範囲が登録されている場合は可視化した画像も表示
         if regions:
             visualized_image = visualize_regions_on_image(image, regions)
-            st.image(visualized_image, caption="登録済み範囲", use_container_width=True)
+            try:
+                st.image(visualized_image, caption="登録済み範囲", use_container_width=True)
+            except TypeError:
+                # 古いStreamlitバージョンではuse_column_widthを使用
+                st.image(visualized_image, caption="登録済み範囲", use_column_width=True)
     
     with col2:
         st.subheader("2点の座標を入力")
