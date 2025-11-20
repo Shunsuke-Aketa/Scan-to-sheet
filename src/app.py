@@ -786,12 +786,29 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 display_image = Image.fromarray(img_rgb)
         
         # HTMLコンポーネントで画像を表示（カーソル位置の座標を表示）
-        print(f"[DEBUG] HTMLコンポーネントを作成します: image_key={image_key}")
-        html_content = create_image_with_coord_display(display_image, image_key)
-        # 高さ制限を緩和し、スクロール可能にする
-        display_height = min(image.height + 50, 1200)  # 最大1200pxまで表示
-        print(f"[DEBUG] HTMLコンポーネントを表示します: height={display_height}")
-        st.components.v1.html(html_content, height=display_height, scrolling=True)
+        try:
+            print(f"[DEBUG] HTMLコンポーネントを作成します: image_key={image_key}")
+            html_content = create_image_with_coord_display(display_image, image_key)
+            
+            # html_contentが正しく生成されているか確認
+            if not html_content or not isinstance(html_content, str):
+                st.error("HTMLコンテンツの生成に失敗しました。")
+                st.image(display_image, caption="画像プレビュー", use_container_width=True)
+            else:
+                # 高さ制限を緩和し、スクロール可能にする
+                display_height = min(image.height + 50, 1200)  # 最大1200pxまで表示
+                # 高さが有効な値か確認
+                if display_height <= 0:
+                    display_height = 600  # デフォルト値
+                
+                print(f"[DEBUG] HTMLコンポーネントを表示します: height={display_height}, html_content length={len(html_content)}")
+                st.components.v1.html(html_content, height=display_height, scrolling=True)
+        except Exception as e:
+            st.error(f"画像表示エラー: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+            # フォールバック: 通常の画像表示を使用
+            st.image(display_image, caption="画像プレビュー（座標表示機能は利用できません）", use_container_width=True)
         
         # 範囲が登録されている場合は可視化した画像も表示
         if regions:
