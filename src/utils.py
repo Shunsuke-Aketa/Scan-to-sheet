@@ -2,7 +2,13 @@
 共通ユーティリティ関数
 PDF変換、画像処理などの共通機能を提供
 """
-import cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    cv2 = None
+
 import numpy as np
 from pathlib import Path
 from typing import List, Tuple, Optional

@@ -23,7 +23,13 @@ import threading
 import time
 
 from PIL import Image
-import cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError as e:
+    CV2_AVAILABLE = False
+    cv2 = None
+    st.error(f"⚠️ OpenCVのインポートに失敗しました: {e}\n\n画像処理機能が制限される可能性があります。")
 
 from src.extractors import OCRExtractor, EASYOCR_AVAILABLE
 from src.utils import (
@@ -175,6 +181,12 @@ def open_opencv_coord_picker(image: Image.Image, image_key: str) -> Optional[Lis
     """
     try:
         # OpenCVが利用可能か確認
+        if not CV2_AVAILABLE or cv2 is None:
+            raise RuntimeError(
+                "OpenCVが利用できません。\n"
+                "この環境ではOpenCVウィンドウを使用できません。\n"
+                "数値入力フィールドで座標を手動入力してください。"
+            )
         if not hasattr(cv2, 'imshow'):
             raise RuntimeError("OpenCVが正しくインストールされていません。")
         

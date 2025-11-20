@@ -10,7 +10,13 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-import cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    cv2 = None
+
 import pytesseract
 import numpy as np
 from typing import List, Dict, Tuple, Optional, Union
