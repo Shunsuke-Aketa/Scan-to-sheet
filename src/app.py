@@ -1007,26 +1007,6 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
                 st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
                 
-                # カーソル位置の座標表示（st.components.v1.htmlを使用）
-                try:
-                    if hasattr(st.components, 'v1') and hasattr(st.components.v1, 'html'):
-                        html_content = create_image_with_coord_display(
-                            display_img_with_points, 
-                            image_key,
-                            original_width=final_display_image.width,
-                            original_height=final_display_image.height
-                        )
-                        # 高さを適切に設定（画像の高さ + 余白）
-                        display_height_html = min(display_height + 100, 1000)
-                        
-                        if display_height_html <= 0:
-                            display_height_html = 600  # デフォルト値
-                        
-                        st.components.v1.html(html_content, height=display_height_html, scrolling=False)
-                except Exception as html_error:
-                    # カーソル座標表示が失敗しても続行
-                    pass
-                
                 # 前回のクリック数を取得（重複処理を防ぐため）
                 last_click_count_key = f'last_click_count_{image_key}'
                 if last_click_count_key not in st.session_state:
@@ -1043,11 +1023,13 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 print(f"[DEBUG] 元の画像サイズ: width={final_display_image.width}, height={final_display_image.height}")
                 print(f"[DEBUG] scale: {scale}")
                 
+                # st_canvasのbackground_imageに画像を設定することで、画像とキャンバスを完全に一致させる
+                # これにより、画像をクリックすると座標が取得できる
                 canvas_result = st_canvas(
                     fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
                     stroke_width=2,
                     stroke_color="#FF0000",  # 線の色（赤）
-                    background_image=display_img_with_points,  # 背景画像（表示用画像）
+                    background_image=display_img_with_points,  # 背景画像（表示用画像）- これがキャンバスの背景として表示される
                     update_streamlit=True,  # クリックを検出するためにTrueに設定
                     height=canvas_height,  # キャンバスの高さを画像の高さに正確に合わせる
                     width=canvas_width,  # キャンバスの幅を画像の幅に正確に合わせる
