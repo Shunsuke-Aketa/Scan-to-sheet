@@ -43,6 +43,14 @@ from src.utils import (
     PYMUPDF_AVAILABLE
 )
 
+# streamlit-drawable-canvasを試行（オプション）
+try:
+    from streamlit_drawable_canvas import st_canvas
+    ST_CANVAS_AVAILABLE = True
+except ImportError:
+    ST_CANVAS_AVAILABLE = False
+    st_canvas = None
+
 # ページ設定
 st.set_page_config(
     page_title="Scan To Sheet - OCR抽出ツール",
@@ -719,9 +727,40 @@ def create_canvas_with_background_image(image: Image.Image, image_key: str, orig
                         }}
                     }}
                     
+                    // 方法4: クリップボードAPIを使用して座標をコピー
                     if (!urlUpdated) {{
-                        console.error('[CLICK] すべてのURL更新方法が失敗しました。セキュリティ制限により、iframe内から親ウィンドウのURLを変更できません。');
-                        alert('座標の送信に失敗しました。ブラウザのセキュリティ制限により、iframe内からURLを変更できません。\\n座標: (' + clampedX + ', ' + clampedY + ')\\n手動で数値入力フィールドに入力してください。');
+                        try {{
+                            const coordText = clampedX + ',' + clampedY;
+                            if (navigator.clipboard && navigator.clipboard.writeText) {{
+                                navigator.clipboard.writeText(coordText).then(function() {{
+                                    console.log('[CLICK] 座標をクリップボードにコピーしました:', coordText);
+                                    alert('座標をクリップボードにコピーしました: (' + clampedX + ', ' + clampedY + ')\\n\\n数値入力フィールドにペースト（Ctrl+V）してください。');
+                                }}).catch(function(err) {{
+                                    console.error('[CLICK] クリップボードへのコピーに失敗:', err);
+                                    alert('座標: (' + clampedX + ', ' + clampedY + ')\\n\\n手動で数値入力フィールドに入力してください。');
+                                }});
+                            }} else {{
+                                // フォールバック: テキストエリアを使用
+                                const textarea = document.createElement('textarea');
+                                textarea.value = coordText;
+                                textarea.style.position = 'fixed';
+                                textarea.style.opacity = '0';
+                                document.body.appendChild(textarea);
+                                textarea.select();
+                                try {{
+                                    document.execCommand('copy');
+                                    console.log('[CLICK] 座標をクリップボードにコピーしました（フォールバック）:', coordText);
+                                    alert('座標をクリップボードにコピーしました: (' + clampedX + ', ' + clampedY + ')\\n\\n数値入力フィールドにペースト（Ctrl+V）してください。');
+                                }} catch (err) {{
+                                    console.error('[CLICK] クリップボードへのコピーに失敗（フォールバック）:', err);
+                                    alert('座標: (' + clampedX + ', ' + clampedY + ')\\n\\n手動で数値入力フィールドに入力してください。');
+                                }}
+                                document.body.removeChild(textarea);
+                            }}
+                        }} catch (e) {{
+                            console.error('[CLICK] クリップボード操作エラー:', e);
+                            alert('座標: (' + clampedX + ', ' + clampedY + ')\\n\\n手動で数値入力フィールドに入力してください。');
+                        }}
                     }}
                 }}
                 
@@ -1392,52 +1431,103 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 draw = ImageDraw.Draw(display_img_with_points)
                 draw.rectangle([display_x1, display_y1, display_x2, display_y2], outline=(255, 0, 255), width=2)
             
-            # カスタムHTMLコンポーネントを使用してクリック座標を取得
-            # 画像を背景として表示し、その上に透明なキャンバスを配置
+            # 複数の方法でクリック座標を取得
             st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
             st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
             
-            try:
-                # カスタムHTMLコンポーネントを作成（画像表示とクリック検出）
-                html_content = create_canvas_with_background_image(
-                    display_image_resized,
-                    image_key,
-                    original_width=final_display_image.width,
-                    original_height=final_display_image.height
-                )
-                
-                # HTMLコンポーネントを表示
-                display_height = min(display_image_resized.height + 50, 1200)
-                if display_height <= 0:
-                    display_height = 800
-                
-                # st.components.v1.htmlが利用可能かチェック
+            # 方法1: streamlit-drawable-canvasを使用（推奨）
+            if ST_CANVAS_AVAILABLE and st_canvas is not None:
                 try:
-                    st.components.v1.html(html_content, height=display_height, scrolling=False)
-                except AttributeError:
-                    # st.components.v1.htmlが利用できない場合（古いStreamlitバージョンなど）
-                    st.warning("⚠️ HTMLコンポーネントが利用できません。数値入力フィールドで座標を指定してください。")
-                    # フォールバック: st.imageを使用
+                    st.markdown("**方法1: キャンバスでクリック**")
+                    canvas_result = st_canvas(
+                        fill_color="rgba(255, 0, 0, 0.3)",
+                        stroke_width=2,
+                        stroke_color="#FF0000",
+                        background_image=display_image_resized,
+                        update_streamlit=True,
+                        height=min(display_image_resized.height, 800),
+                        width=min(display_image_resized.width, 1200),
+                        drawing_mode="point",
+                        point_display_radius=5,
+                        key=f"canvas_{image_key}",
+                    )
+                    
+                    # キャンバスの結果を処理
+                    if canvas_result.json_data is not None:
+                        objects = canvas_result.json_data.get("objects", [])
+                        if objects:
+                            # 最新の2点を取得
+                            points = [(int(obj.get("left", 0)), int(obj.get("top", 0))) for obj in objects[-2:]]
+                            
+                            # 座標を元の画像サイズに変換
+                            if scale != 1.0:
+                                points = [(int(x / scale), int(y / scale)) for x, y in points]
+                            
+                            if len(points) >= 1:
+                                # 1点目（左上）
+                                x1, y1 = points[0]
+                                if 0 <= x1 <= final_display_image.width and 0 <= y1 <= final_display_image.height:
+                                    current_points['top_left'] = (x1, y1)
+                                    st.session_state[f'top_left_x_{image_key}'] = x1
+                                    st.session_state[f'top_left_y_{image_key}'] = y1
+                                    st.session_state[f'click_count_{image_key}'] = 1
+                            
+                            if len(points) >= 2:
+                                # 2点目（右下）
+                                x2, y2 = points[1]
+                                if 0 <= x2 <= final_display_image.width and 0 <= y2 <= final_display_image.height:
+                                    current_points['bottom_right'] = (x2, y2)
+                                    st.session_state[f'bottom_right_x_{image_key}'] = x2
+                                    st.session_state[f'bottom_right_y_{image_key}'] = y2
+                                    st.session_state[f'click_count_{image_key}'] = 2
+                            
+                            st.session_state[f'current_points_{image_key}'] = current_points
+                except Exception as canvas_error:
+                    st.warning(f"⚠️ キャンバス機能でエラーが発生しました: {canvas_error}")
+                    # フォールバック: HTMLコンポーネントを使用
                     try:
-                        st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
-                    except TypeError:
-                        st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
-                
-            except Exception as html_error:
-                # HTMLコンポーネントでエラーが発生した場合
-                st.warning("⚠️ クリック座標取得機能でエラーが発生しました。数値入力フィールドで座標を指定してください。")
-                
-                # エラーの詳細を表示（デバッグ用）
-                import traceback
-                error_details = traceback.format_exc()
-                with st.expander("エラー詳細（デバッグ用）", expanded=False):
-                    st.code(error_details)
-                
-                # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
+                        html_content = create_canvas_with_background_image(
+                            display_image_resized,
+                            image_key,
+                            original_width=final_display_image.width,
+                            original_height=final_display_image.height
+                        )
+                        display_height = min(display_image_resized.height + 50, 1200)
+                        if display_height <= 0:
+                            display_height = 800
+                        st.components.v1.html(html_content, height=display_height, scrolling=False)
+                    except Exception as html_error:
+                        st.image(display_img_with_points, caption="画像プレビュー", use_column_width=True)
+            else:
+                # 方法2: カスタムHTMLコンポーネントを使用（フォールバック）
                 try:
-                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
-                except TypeError:
-                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
+                    st.markdown("**方法2: HTMLコンポーネントでクリック（クリップボードにコピーされます）**")
+                    html_content = create_canvas_with_background_image(
+                        display_image_resized,
+                        image_key,
+                        original_width=final_display_image.width,
+                        original_height=final_display_image.height
+                    )
+                    
+                    display_height = min(display_image_resized.height + 50, 1200)
+                    if display_height <= 0:
+                        display_height = 800
+                    
+                    try:
+                        st.components.v1.html(html_content, height=display_height, scrolling=False)
+                    except AttributeError:
+                        st.warning("⚠️ HTMLコンポーネントが利用できません。数値入力フィールドで座標を指定してください。")
+                        try:
+                            st.image(display_img_with_points, caption="画像プレビュー", use_container_width=True)
+                        except TypeError:
+                            st.image(display_img_with_points, caption="画像プレビュー", use_column_width=True)
+                except Exception as html_error:
+                    # HTMLコンポーネントでエラーが発生した場合
+                    st.warning("⚠️ HTMLコンポーネントでエラーが発生しました。数値入力フィールドで座標を指定してください。")
+                    try:
+                        st.image(display_img_with_points, caption="画像プレビュー", use_container_width=True)
+                    except TypeError:
+                        st.image(display_img_with_points, caption="画像プレビュー", use_column_width=True)
         except Exception as e:
             st.error(f"画像表示エラー: {e}")
             import traceback
@@ -1548,6 +1638,52 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                     st.code(traceback.format_exc())
         
         st.markdown("**または手動で入力**: 画像上でマウスを動かして座標を確認し、数値入力フィールドで座標を入力してください")
+        
+        # クリップボードから座標を貼り付ける機能
+        st.markdown("**📋 クリップボードから座標を貼り付け**: 画像をクリックすると座標がクリップボードにコピーされます。以下のテキストボックスにペースト（Ctrl+V）してから「座標を適用」ボタンをクリックしてください。")
+        clipboard_coords = st.text_input(
+            "クリップボードから座標を貼り付け（例: 526,443）",
+            key=f"clipboard_coords_{image_key}",
+            placeholder="X,Y の形式で入力（例: 526,443）"
+        )
+        
+        if st.button("📥 座標を適用", key=f"apply_clipboard_{image_key}"):
+            if clipboard_coords:
+                try:
+                    # カンマで分割
+                    parts = clipboard_coords.strip().split(',')
+                    if len(parts) == 2:
+                        x = int(parts[0].strip())
+                        y = int(parts[1].strip())
+                        
+                        # 座標が有効な範囲内かチェック
+                        if 0 <= x <= image.width and 0 <= y <= image.height:
+                            click_count = st.session_state[f'click_count_{image_key}']
+                            
+                            # 1回目のクリックは左上、2回目のクリックは右下
+                            if click_count % 2 == 0:
+                                current_points['top_left'] = (x, y)
+                                st.session_state[f'click_count_{image_key}'] = click_count + 1
+                                st.session_state[f'top_left_x_{image_key}'] = x
+                                st.session_state[f'top_left_y_{image_key}'] = y
+                                st.success(f"✅ 左上の点を設定しました: ({x}, {y})")
+                            else:
+                                current_points['bottom_right'] = (x, y)
+                                st.session_state[f'click_count_{image_key}'] = click_count + 1
+                                st.session_state[f'bottom_right_x_{image_key}'] = x
+                                st.session_state[f'bottom_right_y_{image_key}'] = y
+                                st.success(f"✅ 右下の点を設定しました: ({x}, {y})")
+                            
+                            st.session_state[f'current_points_{image_key}'] = current_points
+                            # クリップボード入力をクリア
+                            st.session_state[f'clipboard_coords_{image_key}'] = ""
+                            st.rerun()
+                        else:
+                            st.error(f"⚠️ 座標が画像の範囲外です: ({x}, {y})")
+                    else:
+                        st.error("⚠️ 座標の形式が正しくありません。X,Y の形式で入力してください（例: 526,443）")
+                except ValueError:
+                    st.error("⚠️ 座標の形式が正しくありません。数値で入力してください（例: 526,443）")
         
         # 左上の点
         st.markdown("**1. 左上の点** 🔴")
