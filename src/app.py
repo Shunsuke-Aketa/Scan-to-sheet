@@ -1000,31 +1000,126 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 draw = ImageDraw.Draw(display_img_with_points)
                 draw.rectangle([display_x1, display_y1, display_x2, display_y2], outline=(255, 0, 255), width=2)
             
-            # st.components.v1.htmlを使用して画像を表示し、クリック座標を取得
+            # streamlit-drawable-canvasを使用してクリック座標を取得
             try:
-                # st.components.v1が利用可能かチェック
-                if hasattr(st.components, 'v1') and hasattr(st.components.v1, 'html'):
-                    html_content = create_image_with_coord_display(
-                        display_img_with_points, 
-                        image_key,
-                        original_width=final_display_image.width,
-                        original_height=final_display_image.height
-                    )
-                    # 高さを適切に設定（画像の高さ + 余白）
-                    display_height_html = min(display_height + 100, 1000)
-                    
-                    if display_height_html <= 0:
-                        display_height_html = 600  # デフォルト値
-                    
-                    st.components.v1.html(html_content, height=display_height_html, scrolling=False)
-                else:
-                    # st.components.v1.htmlが利用できない場合は、通常の画像表示にフォールバック
-                    raise AttributeError("st.components.v1.html is not available")
-            except (AttributeError, ImportError, Exception) as html_error:
-                # st.components.v1.htmlが利用できない場合は、通常の画像表示にフォールバック
-                st.warning("⚠️ クリック座標取得機能が利用できません。数値入力フィールドで座標を指定してください。")
+                from streamlit_drawable_canvas import st_canvas
                 
-                # エラーの詳細を表示（デバッグ用、本番環境では削除可能）
+                st.markdown("**🖱️ 画像をクリックして座標を選択してください**")
+                st.caption("1回目のクリック: 左上の点、2回目のクリック: 右下の点")
+                
+                # カーソル位置の座標表示（st.components.v1.htmlを使用）
+                try:
+                    if hasattr(st.components, 'v1') and hasattr(st.components.v1, 'html'):
+                        html_content = create_image_with_coord_display(
+                            display_img_with_points, 
+                            image_key,
+                            original_width=final_display_image.width,
+                            original_height=final_display_image.height
+                        )
+                        # 高さを適切に設定（画像の高さ + 余白）
+                        display_height_html = min(display_height + 100, 1000)
+                        
+                        if display_height_html <= 0:
+                            display_height_html = 600  # デフォルト値
+                        
+                        st.components.v1.html(html_content, height=display_height_html, scrolling=False)
+                except Exception as html_error:
+                    # カーソル座標表示が失敗しても続行
+                    pass
+                
+                # 前回のクリック数を取得（重複処理を防ぐため）
+                last_click_count_key = f'last_click_count_{image_key}'
+                if last_click_count_key not in st.session_state:
+                    st.session_state[last_click_count_key] = 0
+                
+                # streamlit-drawable-canvasでクリック座標を取得
+                canvas_result = st_canvas(
+                    fill_color="rgba(255, 0, 0, 0.3)",  # 塗りつぶし色（赤、半透明）
+                    stroke_width=2,
+                    stroke_color="#FF0000",  # 線の色（赤）
+                    background_image=display_img_with_points,
+                    update_streamlit=True,  # クリックを検出するためにTrueに設定
+                    height=display_height,
+                    width=display_width,
+                    drawing_mode="point",  # ポイントモードでクリックを検出
+                    point_display_radius=5,  # ポイントの表示半径
+                    key=f"canvas_{image_key}",
+                )
+                
+                # クリックされた座標を取得
+                if canvas_result.json_data is not None:
+                    objects = canvas_result.json_data.get("objects", [])
+                    current_click_count = len(objects)
+                    
+                    print(f"[DEBUG] canvas_result.json_data: {canvas_result.json_data}")
+                    print(f"[DEBUG] objects: {objects}")
+                    print(f"[DEBUG] current_click_count: {current_click_count}, last_click_count: {st.session_state[last_click_count_key]}")
+                    
+                    # クリック数が増えた場合のみ処理（重複処理を防ぐ）
+                    if current_click_count > st.session_state[last_click_count_key]:
+                        if objects:
+                            # 最新の2つのポイントを取得
+                            # 表示用画像の座標を元の画像座標に変換
+                            points = []
+                            for obj in objects[-2:]:
+                                # 表示用画像の座標
+                                display_x = int(obj.get("left", 0))
+                                display_y = int(obj.get("top", 0))
+                                # 元の画像座標に変換
+                                orig_x = int(display_x / scale) if scale != 1.0 else display_x
+                                orig_y = int(display_y / scale) if scale != 1.0 else display_y
+                                points.append((orig_x, orig_y))
+                                print(f"[DEBUG] 座標変換: 表示({display_x}, {display_y}) -> 元({orig_x}, {orig_y}), scale={scale}")
+                            
+                            if len(points) >= 1:
+                                # 1回目のクリック: 左上の点
+                                current_points['top_left'] = points[0]
+                                st.session_state[f'click_count_{image_key}'] = 1
+                                print(f"[DEBUG] 左上の点を設定: {points[0]}")
+                                
+                                if len(points) >= 2:
+                                    # 2回目のクリック: 右下の点
+                                    current_points['bottom_right'] = points[1]
+                                    st.session_state[f'click_count_{image_key}'] = 2
+                                    print(f"[DEBUG] 右下の点を設定: {points[1]}")
+                                
+                                # セッション状態を更新
+                                st.session_state[f'current_points_{image_key}'] = current_points
+                                
+                                # 数値入力フィールドのセッション状態も更新
+                                if current_points['top_left']:
+                                    st.session_state[f'top_left_x_{image_key}'] = current_points['top_left'][0]
+                                    st.session_state[f'top_left_y_{image_key}'] = current_points['top_left'][1]
+                                if current_points['bottom_right']:
+                                    st.session_state[f'bottom_right_x_{image_key}'] = current_points['bottom_right'][0]
+                                    st.session_state[f'bottom_right_y_{image_key}'] = current_points['bottom_right'][1]
+                                
+                                # クリック数を更新
+                                st.session_state[last_click_count_key] = current_click_count
+                                
+                                # 成功メッセージを表示
+                                if len(points) == 1:
+                                    st.success(f"✅ 左上の点を選択しました: ({points[0][0]}, {points[0][1]})")
+                                elif len(points) >= 2:
+                                    st.success(f"✅ 右下の点を選択しました: ({points[1][0]}, {points[1][1]})")
+                                
+                                # リロードはst_canvasのupdate_streamlitで自動的に行われる
+                                
+            except ImportError:
+                # streamlit-drawable-canvasがインストールされていない場合
+                st.warning("⚠️ streamlit-drawable-canvasがインストールされていません。数値入力フィールドで座標を指定してください。")
+                st.info("💡 インストール方法: `pip install streamlit-drawable-canvas` または `uv pip install streamlit-drawable-canvas`")
+                
+                # st.imageに渡す（Streamlit Cloudの古いバージョンではuse_column_widthを使用）
+                try:
+                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
+                except TypeError:
+                    st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
+            except Exception as canvas_error:
+                # streamlit-drawable-canvasでエラーが発生した場合
+                st.warning("⚠️ クリック座標取得機能でエラーが発生しました。数値入力フィールドで座標を指定してください。")
+                
+                # エラーの詳細を表示（デバッグ用）
                 import traceback
                 error_details = traceback.format_exc()
                 with st.expander("エラー詳細（デバッグ用）", expanded=False):
@@ -1034,7 +1129,6 @@ def render_click_coord_input(image: Image.Image, image_key: str) -> List[Dict]:
                 try:
                     st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_container_width=True)
                 except TypeError:
-                    # 古いStreamlitバージョンではuse_column_widthを使用
                     st.image(display_img_with_points, caption="画像プレビュー（座標は数値入力フィールドで指定してください）", use_column_width=True)
         except Exception as e:
             st.error(f"画像表示エラー: {e}")
