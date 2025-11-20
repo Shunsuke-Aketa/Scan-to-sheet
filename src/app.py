@@ -81,17 +81,34 @@ if 'selected_files_for_processing' not in st.session_state:
     st.session_state.selected_files_for_processing = []
 
 
-def convert_image_for_display(image: np.ndarray) -> Image.Image:
-    """OpenCV画像をPIL Imageに変換（表示用）"""
-    if not CV2_AVAILABLE or cv2 is None:
-        # OpenCVが利用できない場合は、そのままPIL Imageに変換
-        return Image.fromarray(image)
+def convert_image_for_display(image) -> Image.Image:
+    """
+    OpenCV画像またはPIL ImageをPIL Imageに変換（表示用）
     
-    if len(image.shape) == 3:
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    else:
-        image_rgb = image
-    return Image.fromarray(image_rgb)
+    Args:
+        image: OpenCV画像（np.ndarray）またはPIL Image
+    
+    Returns:
+        PIL Image
+    """
+    # 既にPIL Imageの場合はそのまま返す
+    if isinstance(image, Image.Image):
+        return image
+    
+    # numpy配列の場合はPIL Imageに変換
+    if isinstance(image, np.ndarray):
+        if not CV2_AVAILABLE or cv2 is None:
+            # OpenCVが利用できない場合は、そのままPIL Imageに変換
+            return Image.fromarray(image)
+        
+        if len(image.shape) == 3:
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        else:
+            image_rgb = image
+        return Image.fromarray(image_rgb)
+    
+    # その他の型の場合はエラー
+    raise TypeError(f"Unsupported image type: {type(image)}")
 
 
 def image_to_base64(image: Image.Image) -> str:

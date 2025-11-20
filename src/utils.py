@@ -506,13 +506,13 @@ def bytes_to_image(image_bytes: bytes) -> np.ndarray:
         image_bytes: 画像のバイトデータ
     
     Returns:
-        画像データ（numpy配列、BGR形式）
+        画像データ（numpy配列、BGR形式、またはRGB形式（cv2が利用できない場合））
     """
     pil_image = Image.open(io.BytesIO(image_bytes))
     img_array = np.array(pil_image)
     
     # RGBからBGRに変換（OpenCV用）
-    if len(img_array.shape) == 3:
+    if CV2_AVAILABLE and cv2 is not None and len(img_array.shape) == 3:
         img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
     
     return img_array
